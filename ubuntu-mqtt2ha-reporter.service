@@ -1,0 +1,19 @@
+[Unit]
+Description=Report system status to Home Assistant via MQTT
+After=network.target
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+User=ubuntu-mqtt2ha-reporter
+Group=ubuntu-mqtt2ha-reporter
+Type=simple
+Environment=RUST_LOG=info
+ExecStart=/opt/ubuntu-mqtt2ha-reporter/ubuntu-mqtt2ha-reporter
+WorkingDirectory=/opt/ubuntu-mqtt2ha-reporter
+KillMode=process
+Restart=on-failure
+RestartSec=10s
+RestartSteps=5
+RestartMaxDelaySec=60s
