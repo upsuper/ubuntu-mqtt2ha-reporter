@@ -13,6 +13,7 @@ pub struct Publisher<'a> {
     pub machine_id: &'a str,
     pub config: &'a Mqtt,
     pub client: &'a AsyncClient,
+    pub availability_topic: &'a str,
     pub sensors: &'a Sensors,
 }
 
@@ -34,6 +35,7 @@ impl<'a> Publisher<'a> {
         };
         let publisher = DiscoveryPublisher {
             client: self.client,
+            availability_topic: self.availability_topic,
             discovery_prefix: &self.config.discovery_prefix,
             hostname_snake: &hostname_snake,
             device: &device,
@@ -95,6 +97,7 @@ impl<'a> Publisher<'a> {
 
 struct DiscoveryPublisher<'a> {
     client: &'a AsyncClient,
+    availability_topic: &'a str,
     discovery_prefix: &'a str,
     hostname_snake: &'a str,
     device: &'a Device<'a>,
@@ -114,8 +117,13 @@ impl<'a> DiscoveryPublisher<'a> {
                 format!("{prefix}/{sensor_type}/{sensor_id}/config")
             };
             let payload = {
-                let discovery =
-                    HaSensorDiscovery::new(&sensor_id, sensor.topic(), &item, self.device);
+                let discovery = HaSensorDiscovery::new(
+                    &sensor_id,
+                    sensor.topic(),
+                    &item,
+                    self.availability_topic,
+                    self.device,
+                );
                 serde_json::to_string(&discovery).unwrap()
             };
             debug!("Publishing {} to {}", payload, discovery_topic);

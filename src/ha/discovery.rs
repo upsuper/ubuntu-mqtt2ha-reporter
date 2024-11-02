@@ -6,6 +6,7 @@ use serde::Serialize;
 #[derive(Serialize)]
 pub struct HaSensorDiscovery<'a> {
     unique_id: &'a str,
+    availability_topic: &'a str,
     name: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     icon: Option<&'static str>,
@@ -35,6 +36,7 @@ impl<'a> HaSensorDiscovery<'a> {
         unique_id: &'a str,
         topic: &'a str,
         discovery: &'a SensorDiscovery,
+        availability_topic: &'a str,
         device: &'a Device<'a>,
     ) -> Self {
         let (attrs_topic, attrs_tpl) = match discovery.attributes_template {
@@ -43,6 +45,7 @@ impl<'a> HaSensorDiscovery<'a> {
         };
         HaSensorDiscovery {
             unique_id,
+            availability_topic,
             name: &discovery.title,
             icon: discovery.icon,
             entity_category: discovery.entity_category,

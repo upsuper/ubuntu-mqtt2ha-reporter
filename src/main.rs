@@ -5,7 +5,7 @@ use crate::utils::snake_case::make_snake_case;
 use anyhow::{anyhow, Context, Error};
 use log::{info, trace, warn};
 use mimalloc::MiMalloc;
-use rumqttc::{AsyncClient, MqttOptions};
+use rumqttc::{AsyncClient, MqttOptions, QoS};
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 use std::time::Duration;
@@ -55,39 +55,70 @@ async fn main() -> Result<(), Error> {
 
     let topic_base = format!("{}/{}", config.mqtt.base_topic, make_snake_case(hostname));
     let sensors = create_sensors(&topic_base)?;
+    let availability_topic = format!("{topic_base}/availability");
 
     let options = build_mqtt_options(hostname, &config.mqtt)?;
     let (client, mut event_loop) = AsyncClient::new(options, 10);
 
-    let publishing = task::spawn(async move {
-        let publisher = Publisher {
-            hostname,
-            machine_id,
-            config: &config.mqtt,
-            client: &client,
-            sensors: &sensors,
-        };
-        if let Err(e) = publisher.publish_discovery().await {
-            return e.context("Failed to publish discovery");
-        }
-        // Wait for a few seconds before publishing the first status.
-        sleep(Duration::from_secs(5)).await;
+    let publishing = task::spawn({
+        let availability_topic = availability_topic.clone();
+        let client = client.clone();
+        async move {
+            let publisher = Publisher {
+                hostname,
+                machine_id,
+                config: &config.mqtt,
+                client: &client,
+                availability_topic: &availability_topic,
+                sensors: &sensors,
+            };
+            if let Err(e) = publisher.publish_discovery().await {
+                return e.context("Failed to publish discovery");
+            }
+            // Wait for a few seconds before publishing the first status.
+            sleep(Duration::from_secs(5)).await;
 
-        let interval_duration =
-            Duration::from_secs(u64::from(config.daemon.interval_in_minutes) * 60);
-        let mut interval = interval(interval_duration);
-        interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-        // Don't let publishing breach 80% of interval.
-        let timeout_duration = interval_duration * 4 / 5;
+            let interval_duration =
+                Duration::from_secs(u64::from(config.daemon.interval_in_minutes) * 60);
+            let mut interval = interval(interval_duration);
+            interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+            // Don't let publishing breach 80% of interval.
+            let timeout_duration = interval_duration * 4 / 5;
 
-        loop {
-            interval.tick().await;
-            match timeout(timeout_duration, publisher.publish_status()).await {
-                Ok(()) => {}
-                // Ignore timeout.
-                Err(_) => warn!("Timeout publishing"),
+            loop {
+                interval.tick().await;
+                match timeout(timeout_duration, publisher.publish_status()).await {
+                    Ok(()) => {}
+                    // Ignore timeout.
+                    Err(_) => warn!("Timeout publishing"),
+                }
             }
         }
+    });
+
+    let sending_availability = task::spawn(async move {
+        let mut interval = interval(Duration::from_secs(60));
+        interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        let publishing_online = async {
+            loop {
+                if let Err(e) = client
+                    .publish(&availability_topic, QoS::AtLeastOnce, false, "online")
+                    .await
+                {
+                    break anyhow!(e).context("Failed to publish online");
+                }
+                interval.tick().await;
+            }
+        };
+        select! {
+            e = publishing_online => return Err(e.context("Failed to publish online")),
+            s = shutdown_receiver => s.context("Failed to receive shutdown signal")?,
+        }
+        client
+            .publish(&availability_topic, QoS::AtLeastOnce, false, "offline")
+            .await
+            .context("Failed to publish availability")?;
+        Ok::<(), Error>(())
     });
 
     let event_loop = task::spawn(async move {
@@ -99,7 +130,7 @@ async fn main() -> Result<(), Error> {
     });
 
     select! {
-        r = shutdown_receiver => r.context("Failed to receive shutdown signal"),
+        r = sending_availability => r.context("Failed to send availability")?,
         e = publishing => Err(e.context("Failed to join publishing task")?),
         e = event_loop => Err(e.context("Failed to join event loop")?),
     }
