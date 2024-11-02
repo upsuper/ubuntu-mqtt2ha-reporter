@@ -8,9 +8,8 @@ use mimalloc::MiMalloc;
 use rumqttc::{AsyncClient, MqttOptions, QoS};
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
+use std::fs;
 use std::time::Duration;
-use std::{fs, thread};
-use tokio::sync::oneshot;
 use tokio::time::{interval, sleep, timeout, MissedTickBehavior};
 use tokio::{select, task};
 
@@ -42,14 +41,12 @@ async fn main() -> Result<(), Error> {
     let config = toml::from_str::<Config>(&config).context("Could not parse config.toml")?;
     trace!("Config: {:#?}", config);
 
-    let (shutdown_sender, shutdown_receiver) = oneshot::channel();
     let mut signals =
         Signals::new([SIGINT, SIGTERM]).context("Failed to initialize signal handler")?;
-    thread::spawn(move || {
+    let shutdown_signal = task::spawn_blocking(move || {
         if let Some(signal) = signals.forever().next() {
             info!("Received signal {}, shutting down", signal);
             assert!(matches!(signal, SIGINT | SIGTERM));
-            shutdown_sender.send(()).ok();
         }
     });
 
@@ -112,7 +109,7 @@ async fn main() -> Result<(), Error> {
         };
         select! {
             e = publishing_online => return Err(e.context("Failed to publish online")),
-            s = shutdown_receiver => s.context("Failed to receive shutdown signal")?,
+            s = shutdown_signal => s.context("Failed to receive shutdown signal")?,
         }
         client
             .publish(&availability_topic, QoS::AtLeastOnce, false, "offline")
