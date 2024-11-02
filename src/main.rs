@@ -57,43 +57,39 @@ async fn main() -> Result<(), Error> {
     let options = build_mqtt_options(hostname, &config.mqtt)?;
     let (client, mut event_loop) = AsyncClient::new(options, 10);
 
-    let publishing = task::spawn({
-        let availability_topic = availability_topic.clone();
-        let client = client.clone();
-        async move {
-            let publisher = Publisher {
-                hostname,
-                machine_id,
-                config: &config.mqtt,
-                client: &client,
-                availability_topic: &availability_topic,
-                sensors: &sensors,
-            };
-            if let Err(e) = publisher.publish_discovery().await {
-                return e.context("Failed to publish discovery");
-            }
-            // Wait for a few seconds before publishing the first status.
-            sleep(Duration::from_secs(5)).await;
+    let publishing = async {
+        let publisher = Publisher {
+            hostname,
+            machine_id,
+            config: &config.mqtt,
+            client: &client,
+            availability_topic: &availability_topic,
+            sensors: &sensors,
+        };
+        if let Err(e) = publisher.publish_discovery().await {
+            return e.context("Failed to publish discovery");
+        }
+        // Wait for a few seconds before publishing the first status.
+        sleep(Duration::from_secs(5)).await;
 
-            let interval_duration =
-                Duration::from_secs(u64::from(config.daemon.interval_in_minutes) * 60);
-            let mut interval = interval(interval_duration);
-            interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-            // Don't let publishing breach 80% of interval.
-            let timeout_duration = interval_duration * 4 / 5;
+        let interval_duration =
+            Duration::from_secs(u64::from(config.daemon.interval_in_minutes) * 60);
+        let mut interval = interval(interval_duration);
+        interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        // Don't let publishing breach 80% of interval.
+        let timeout_duration = interval_duration * 4 / 5;
 
-            loop {
-                interval.tick().await;
-                match timeout(timeout_duration, publisher.publish_status()).await {
-                    Ok(()) => {}
-                    // Ignore timeout.
-                    Err(_) => warn!("Timeout publishing"),
-                }
+        loop {
+            interval.tick().await;
+            match timeout(timeout_duration, publisher.publish_status()).await {
+                Ok(()) => {}
+                // Ignore timeout.
+                Err(_) => warn!("Timeout publishing"),
             }
         }
-    });
+    };
 
-    let sending_availability = task::spawn(async move {
+    let sending_availability = async {
         let mut interval = interval(Duration::from_secs(60));
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
         let publishing_online = async {
@@ -116,20 +112,20 @@ async fn main() -> Result<(), Error> {
             .await
             .context("Failed to publish availability")?;
         Ok::<(), Error>(())
-    });
+    };
 
-    let event_loop = task::spawn(async move {
+    let event_loop = async {
         loop {
             if let Err(e) = event_loop.poll().await {
                 break anyhow!(e).context("Failed to poll event loop");
             }
         }
-    });
+    };
 
     select! {
-        r = sending_availability => r.context("Failed to send availability")?,
-        e = publishing => Err(e.context("Failed to join publishing task")?),
-        e = event_loop => Err(e.context("Failed to join event loop")?),
+        r = sending_availability => r.context("Failed to send availability"),
+        e = publishing => Err(e.context("Failed to join publishing task")),
+        e = event_loop => Err(e.context("Failed to join event loop")),
     }
 }
 
