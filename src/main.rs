@@ -6,8 +6,11 @@ use anyhow::{anyhow, Context, Error};
 use log::{info, trace, warn};
 use mimalloc::MiMalloc;
 use rumqttc::{AsyncClient, MqttOptions};
-use std::fs;
+use signal_hook::consts::{SIGINT, SIGTERM};
+use signal_hook::iterator::Signals;
 use std::time::Duration;
+use std::{fs, thread};
+use tokio::sync::oneshot;
 use tokio::time::{interval, sleep, timeout, MissedTickBehavior};
 use tokio::{select, task};
 
@@ -38,6 +41,17 @@ async fn main() -> Result<(), Error> {
     let config = fs::read_to_string("config.toml").context("Could not read config.toml")?;
     let config = toml::from_str::<Config>(&config).context("Could not parse config.toml")?;
     trace!("Config: {:#?}", config);
+
+    let (shutdown_sender, shutdown_receiver) = oneshot::channel();
+    let mut signals =
+        Signals::new([SIGINT, SIGTERM]).context("Failed to initialize signal handler")?;
+    thread::spawn(move || {
+        if let Some(signal) = signals.forever().next() {
+            info!("Received signal {}, shutting down", signal);
+            assert!(matches!(signal, SIGINT | SIGTERM));
+            shutdown_sender.send(()).ok();
+        }
+    });
 
     let topic_base = format!("{}/{}", config.mqtt.base_topic, make_snake_case(hostname));
     let sensors = create_sensors(&topic_base)?;
@@ -85,6 +99,7 @@ async fn main() -> Result<(), Error> {
     });
 
     select! {
+        r = shutdown_receiver => r.context("Failed to receive shutdown signal"),
         e = publishing => Err(e.context("Failed to join publishing task")?),
         e = event_loop => Err(e.context("Failed to join event loop")?),
     }
