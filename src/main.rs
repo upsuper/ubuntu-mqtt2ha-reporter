@@ -3,13 +3,14 @@ use crate::publisher::Publisher;
 use crate::sensors::create_sensors;
 use crate::utils::snake_case::make_snake_case;
 use anyhow::{anyhow, Context, Error};
-use log::{info, trace, warn};
+use log::{debug, info, trace, warn};
 use mimalloc::MiMalloc;
-use rumqttc::{AsyncClient, MqttOptions, QoS};
+use rumqttc::{AsyncClient, Event, MqttOptions, Outgoing, QoS};
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 use std::fs;
 use std::time::Duration;
+use tokio::sync::oneshot;
 use tokio::time::{interval, sleep, timeout, MissedTickBehavior};
 use tokio::{select, task};
 
@@ -57,6 +58,7 @@ async fn main() -> Result<(), Error> {
     let options = build_mqtt_options(hostname, &config.mqtt)?;
     let (client, mut event_loop) = AsyncClient::new(options, 10);
 
+    let (discovery_signal_sender, discovery_signal_receiver) = oneshot::channel();
     let publishing = async {
         let publisher = Publisher {
             hostname,
@@ -66,9 +68,13 @@ async fn main() -> Result<(), Error> {
             availability_topic: &availability_topic,
             sensors: &sensors,
         };
+        info!("Publishing discovery...");
         if let Err(e) = publisher.publish_discovery().await {
             return e.context("Failed to publish discovery");
         }
+        if let Err(()) = discovery_signal_sender.send(()) {
+            return anyhow!("Failed to notify discovery done");
+        };
         // Wait for a few seconds before publishing the first status.
         sleep(Duration::from_secs(5)).await;
 
@@ -90,43 +96,56 @@ async fn main() -> Result<(), Error> {
     };
 
     let sending_availability = async {
+        discovery_signal_receiver
+            .await
+            .context("Failed to receive discovery done")?;
+
         let mut interval = interval(Duration::from_secs(60));
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
         let publishing_online = async {
             loop {
+                interval.tick().await;
+                debug!("Sending online message");
                 if let Err(e) = client
                     .publish(&availability_topic, QoS::AtLeastOnce, false, "online")
                     .await
                 {
                     break anyhow!(e).context("Failed to publish online");
                 }
-                interval.tick().await;
             }
         };
         select! {
             e = publishing_online => return Err(e.context("Failed to publish online")),
             s = shutdown_signal => s.context("Failed to receive shutdown signal")?,
         }
+        debug!("Sending offline message");
         client
             .publish(&availability_topic, QoS::AtLeastOnce, false, "offline")
             .await
             .context("Failed to publish availability")?;
+        client.disconnect().await.context("Failed to disconnect")?;
         Ok::<(), Error>(())
     };
 
-    let event_loop = async {
+    let event_loop = task::spawn(async move {
         loop {
-            if let Err(e) = event_loop.poll().await {
-                break anyhow!(e).context("Failed to poll event loop");
+            let event = event_loop
+                .poll()
+                .await
+                .context("Failed to poll event loop")?;
+            match event {
+                Event::Outgoing(Outgoing::Disconnect) => break,
+                _ => {}
             }
         }
-    };
+        Ok::<_, Error>(())
+    });
 
     select! {
-        r = sending_availability => r.context("Failed to send availability"),
-        e = publishing => Err(e.context("Failed to join publishing task")),
-        e = event_loop => Err(e.context("Failed to join event loop")),
+        r = sending_availability => r.context("Failed to send availability")?,
+        e = publishing => return Err(e.context("Failed to join publishing task")),
     }
+    event_loop.await.context("Failed to join event loop")?
 }
 
 fn build_mqtt_options(hostname: &str, config: &Mqtt) -> Result<MqttOptions, Error> {
