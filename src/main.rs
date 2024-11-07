@@ -137,9 +137,8 @@ async fn main() -> Result<(), Error> {
                 .poll()
                 .await
                 .context("Failed to poll event loop")?;
-            match event {
-                Event::Outgoing(Outgoing::Disconnect) => break,
-                _ => {}
+            if let Event::Outgoing(Outgoing::Disconnect) = event {
+                break;
             }
         }
         Ok::<_, Error>(())
