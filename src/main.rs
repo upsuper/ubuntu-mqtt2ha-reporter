@@ -8,11 +8,11 @@ use mimalloc::MiMalloc;
 use rumqttc::{AsyncClient, Event, MqttOptions, Outgoing, QoS};
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
-use std::fs;
 use std::time::Duration;
+use std::{fs, thread};
+use tokio::select;
 use tokio::sync::oneshot;
 use tokio::time::{interval, sleep, timeout, MissedTickBehavior};
-use tokio::{select, task};
 
 mod commands;
 mod config;
@@ -44,10 +44,12 @@ async fn main() -> Result<(), Error> {
 
     let mut signals =
         Signals::new([SIGINT, SIGTERM]).context("Failed to initialize signal handler")?;
-    let shutdown_signal = task::spawn_blocking(move || {
+    let (shutdown_sender, shutdown_receiver) = oneshot::channel::<()>();
+    thread::spawn(move || {
         if let Some(signal) = signals.forever().next() {
             info!("Received signal {}, shutting down", signal);
             assert!(matches!(signal, SIGINT | SIGTERM));
+            shutdown_sender.send(()).expect("Failed to send shutdown");
         }
     });
 
@@ -116,7 +118,7 @@ async fn main() -> Result<(), Error> {
         };
         select! {
             e = publishing_online => return Err(e.context("Failed to publish online")),
-            s = shutdown_signal => s.context("Failed to receive shutdown signal")?,
+            s = shutdown_receiver => s.context("Failed to receive shutdown signal")?,
         }
         debug!("Sending offline message");
         client
