@@ -74,11 +74,12 @@ async fn main() -> Result<(), Error> {
         if let Err(e) = publisher.publish_discovery().await {
             return e.context("Failed to publish discovery");
         }
+        // Wait for a few seconds before publishing the first status.
+        sleep(Duration::from_secs(5)).await;
+
         if let Err(()) = discovery_signal_sender.send(()) {
             return anyhow!("Failed to notify discovery done");
         };
-        // Wait for a few seconds before publishing the first status.
-        sleep(Duration::from_secs(5)).await;
 
         let interval_duration =
             Duration::from_secs(u64::from(config.daemon.interval_in_minutes) * 60);
