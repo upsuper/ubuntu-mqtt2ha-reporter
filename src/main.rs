@@ -3,6 +3,7 @@ use crate::publisher::Publisher;
 use crate::sensors::create_sensors;
 use crate::utils::snake_case::make_snake_case;
 use anyhow::{anyhow, Context, Error};
+use futures_util::pin_mut;
 use log::{debug, info, trace, warn};
 use mimalloc::MiMalloc;
 use rumqttc::{AsyncClient, Event, MqttOptions, Outgoing, QoS};
@@ -130,7 +131,7 @@ async fn main() -> Result<(), Error> {
         Ok::<(), Error>(())
     };
 
-    let event_loop = task::spawn(async move {
+    let event_loop = async move {
         loop {
             let event = event_loop
                 .poll()
@@ -142,13 +143,15 @@ async fn main() -> Result<(), Error> {
             }
         }
         Ok::<_, Error>(())
-    });
+    };
+    pin_mut!(event_loop);
 
     select! {
-        r = sending_availability => r.context("Failed to send availability")?,
-        e = publishing => return Err(e.context("Failed to join publishing task")),
-    }
-    event_loop.await.context("Failed to join event loop")?
+        r = &mut event_loop => r.context("Event loop")?,
+        r = sending_availability => r.context("Sending availability")?,
+        e = publishing => return Err(e.context("Publishing")),
+    };
+    event_loop.await
 }
 
 fn build_mqtt_options(hostname: &str, config: &Mqtt) -> Result<MqttOptions, Error> {
