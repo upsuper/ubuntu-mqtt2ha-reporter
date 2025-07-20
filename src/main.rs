@@ -1,5 +1,4 @@
 use crate::config::{Config, Mqtt};
-use crate::publisher::Publisher;
 use crate::sensors::create_sensors;
 use crate::utils::snake_case::make_snake_case;
 use anyhow::{anyhow, Context as _, Error};
@@ -20,8 +19,8 @@ mod config;
 mod discovery_publisher;
 mod ha;
 mod machine_id;
-mod publisher;
 mod sensor;
+mod sensor_publisher;
 mod sensors;
 mod utils;
 
@@ -90,7 +89,7 @@ async fn main() -> Result<(), Error> {
     sleep(Duration::from_secs(5)).await;
 
     let publishing = async {
-        let publisher = Publisher {
+        let publisher = sensor_publisher::SensorPublisher {
             client: &client,
             sensors: &sensors,
         };

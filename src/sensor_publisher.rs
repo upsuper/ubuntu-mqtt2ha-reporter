@@ -5,12 +5,12 @@ use log::{debug, error};
 use rumqttc::{AsyncClient, QoS};
 use std::any::type_name;
 
-pub struct Publisher<'a> {
+pub struct SensorPublisher<'a> {
     pub client: &'a AsyncClient,
     pub sensors: &'a Sensors,
 }
 
-impl<'a> Publisher<'a> {
+impl<'a> SensorPublisher<'a> {
     pub async fn publish_status(&self) {
         let Sensors {
             monitor_sensor,
