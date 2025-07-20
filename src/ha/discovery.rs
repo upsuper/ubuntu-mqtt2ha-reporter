@@ -1,3 +1,4 @@
+use crate::command::CommandDiscovery;
 use crate::ha::values::{DeviceClass, EntityCategory, StateClass};
 use crate::sensor::SensorDiscovery;
 use bitflags::bitflags;
@@ -67,6 +68,39 @@ bitflags! {
     pub struct Flags: u8 {
         const ATTRS = 1 << 0;
         const BINARY = 1 << 1;
+    }
+}
+
+#[derive(Serialize)]
+pub struct HaButtonDiscovery<'a> {
+    unique_id: &'a str,
+    availability_topic: &'a str,
+    name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    icon: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    device_class: Option<&'static str>,
+    command_topic: &'a str,
+    device: &'a Device<'a>,
+}
+
+impl<'a> HaButtonDiscovery<'a> {
+    pub fn new(
+        unique_id: &'a str,
+        command_topic: &'a str,
+        discovery: &'a CommandDiscovery,
+        availability_topic: &'a str,
+        device: &'a Device<'a>,
+    ) -> Self {
+        HaButtonDiscovery {
+            unique_id,
+            availability_topic,
+            name: &discovery.name,
+            icon: discovery.icon,
+            device_class: discovery.device_class,
+            command_topic,
+            device,
+        }
     }
 }
 

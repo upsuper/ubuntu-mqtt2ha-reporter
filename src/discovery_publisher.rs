@@ -1,4 +1,6 @@
-use crate::ha::discovery::{Device, HaSensorDiscovery};
+use crate::command::Command;
+use crate::commands::Commands;
+use crate::ha::discovery::{Device, HaButtonDiscovery, HaSensorDiscovery};
 use crate::sensor::Sensor;
 use crate::sensors::Sensors;
 use crate::utils::snake_case::make_snake_case;
@@ -13,6 +15,7 @@ pub async fn publish_discovery(
     hostname: &str,
     machine_id: &str,
     sensors: &Sensors,
+    commands: &Commands,
 ) -> Result<(), Error> {
     let Sensors {
         monitor_sensor,
@@ -24,6 +27,7 @@ pub async fn publish_discovery(
         apt_sensor,
         reboot_sensor,
     } = sensors;
+    let Commands { reboot_command } = commands;
     let hostname_snake = make_snake_case(hostname);
     let device = Device {
         name: Some(hostname),
@@ -46,6 +50,7 @@ pub async fn publish_discovery(
         publisher.publish_sensor(net_sensor),
         publisher.publish_sensor(apt_sensor),
         publisher.publish_sensor(reboot_sensor),
+        publisher.publish_command(reboot_command),
     )?;
 
     Ok(())
@@ -87,6 +92,33 @@ impl<'a> DiscoveryPublisher<'a> {
                 .publish(discovery_topic, QoS::AtLeastOnce, true, payload)
                 .await
                 .with_context(|| format!("Failed to publish discovery for sensor {}", item.id))?;
+        }
+
+        Ok(())
+    }
+
+    async fn publish_command<C: Command>(&self, command: &C) -> Result<(), Error> {
+        for item in command.discovery_data() {
+            let command_id = format!("{}_{}", self.hostname_snake, item.id);
+            let discovery_topic = {
+                let prefix = self.discovery_prefix;
+                format!("{prefix}/button/{command_id}/config")
+            };
+            let payload = {
+                let discovery = HaButtonDiscovery::new(
+                    &command_id,
+                    command.topic(),
+                    &item,
+                    self.availability_topic,
+                    self.device,
+                );
+                serde_json::to_string(&discovery).unwrap()
+            };
+            debug!("Publishing {} to {}", payload, discovery_topic);
+            self.client
+                .publish(discovery_topic, QoS::AtLeastOnce, true, payload)
+                .await
+                .with_context(|| format!("Failed to publish discovery for command {}", item.id))?;
         }
 
         Ok(())

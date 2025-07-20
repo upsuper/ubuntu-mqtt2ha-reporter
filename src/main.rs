@@ -1,3 +1,4 @@
+use crate::commands::create_commands;
 use crate::config::{Config, Mqtt};
 use crate::sensors::create_sensors;
 use crate::utils::snake_case::make_snake_case;
@@ -5,15 +6,18 @@ use anyhow::{anyhow, Context as _, Error};
 use futures_util::TryFutureExt;
 use log::{debug, info, trace, warn};
 use mimalloc::MiMalloc;
-use rumqttc::{AsyncClient, Event, MqttOptions, Outgoing, QoS};
+use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, Outgoing, QoS};
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 use std::time::Duration;
 use std::{fs, thread};
 use tokio::select;
-use tokio::sync::oneshot;
+use tokio::sync::mpsc::error::TrySendError;
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::{interval, sleep, timeout, MissedTickBehavior};
 
+mod command;
+mod command_subscriber;
 mod commands;
 mod config;
 mod discovery_publisher;
@@ -56,23 +60,57 @@ async fn main() -> Result<(), Error> {
 
     let topic_base = format!("{}/{}", config.mqtt.base_topic, make_snake_case(hostname));
     let sensors = create_sensors(&topic_base)?;
+    let commands = create_commands(&topic_base);
     let availability_topic = format!("{topic_base}/availability");
 
     let options = build_mqtt_options(hostname, &config.mqtt)?;
     let (client, mut event_loop) = AsyncClient::new(options, 10);
+    let (msg_sender, mut msg_receiver) = mpsc::channel(8);
     let mut event_loop = tokio::spawn(async move {
         loop {
             let event = event_loop
                 .poll()
                 .await
                 .context("Failed to poll event loop")?;
-            if let Event::Outgoing(Outgoing::Disconnect) = event {
-                break;
+            match event {
+                Event::Incoming(Incoming::Publish(publish)) => {
+                    match msg_sender.try_send(publish.topic) {
+                        Ok(_) => {}
+                        Err(TrySendError::Full(_)) => {
+                            warn!("Dropping message due to full channel");
+                        }
+                        Err(TrySendError::Closed(_)) => {
+                            warn!("Dropping message due to closed channel")
+                        }
+                    }
+                }
+                Event::Outgoing(Outgoing::Disconnect) => {
+                    break;
+                }
+                _ => {}
             }
         }
         Ok::<_, Error>(())
     })
     .unwrap_or_else(|e| Err(e).context("Failed to join event loop"));
+
+    info!("Subscribing commands...");
+    let command_subscriber = command_subscriber::CommandSubscriber::new(&commands);
+    command_subscriber
+        .subscribe_to_commands(&client)
+        .await
+        .context("Failed to subscribe to commands")?;
+    let handling_commands = async move {
+        loop {
+            let topic = msg_receiver
+                .recv()
+                .await
+                .context("Failed to receive message")?;
+            command_subscriber.handle_message(&topic).await;
+        }
+        #[allow(unreachable_code)]
+        Ok::<_, Error>(())
+    };
 
     info!("Publishing discovery...");
     discovery_publisher::publish_discovery(
@@ -82,6 +120,7 @@ async fn main() -> Result<(), Error> {
         hostname,
         machine_id,
         &sensors,
+        &commands,
     )
     .await
     .context("Failed to publish discovery")?;
@@ -141,6 +180,7 @@ async fn main() -> Result<(), Error> {
     select! {
         r = &mut event_loop => r.context("Event loop")?,
         r = sending_availability => r.context("Sending availability")?,
+        r = handling_commands => r.context("Handling commands")?,
         () = publishing => unreachable!("Publishing should never complete"),
     };
     event_loop.await

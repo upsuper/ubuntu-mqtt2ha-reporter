@@ -1,0 +1,6 @@
+# Allow the ubuntu-mqtt2ha-reporter user to run specific system commands without password
+# Usage:
+# 1. Copy this file to /etc/sudoers.d/ubuntu-mqtt2ha-reporter
+# 2. Ensure the file has proper permissions: sudo chmod 440 /etc/sudoers.d/ubuntu-mqtt2ha-reporter
+
+ubuntu-mqtt2ha-reporter ALL=(root) NOPASSWD: /usr/bin/systemctl reboot
