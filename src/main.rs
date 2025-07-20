@@ -2,8 +2,8 @@ use crate::config::{Config, Mqtt};
 use crate::publisher::Publisher;
 use crate::sensors::create_sensors;
 use crate::utils::snake_case::make_snake_case;
-use anyhow::{anyhow, Context, Error};
-use futures_util::pin_mut;
+use anyhow::{anyhow, Context as _, Error};
+use futures_util::TryFutureExt;
 use log::{debug, info, trace, warn};
 use mimalloc::MiMalloc;
 use rumqttc::{AsyncClient, Event, MqttOptions, Outgoing, QoS};
@@ -17,6 +17,7 @@ use tokio::time::{interval, sleep, timeout, MissedTickBehavior};
 
 mod commands;
 mod config;
+mod discovery_publisher;
 mod ha;
 mod machine_id;
 mod publisher;
@@ -60,28 +61,39 @@ async fn main() -> Result<(), Error> {
 
     let options = build_mqtt_options(hostname, &config.mqtt)?;
     let (client, mut event_loop) = AsyncClient::new(options, 10);
+    let mut event_loop = tokio::spawn(async move {
+        loop {
+            let event = event_loop
+                .poll()
+                .await
+                .context("Failed to poll event loop")?;
+            if let Event::Outgoing(Outgoing::Disconnect) = event {
+                break;
+            }
+        }
+        Ok::<_, Error>(())
+    })
+    .unwrap_or_else(|e| Err(e).context("Failed to join event loop"));
 
-    let (discovery_signal_sender, discovery_signal_receiver) = oneshot::channel();
+    info!("Publishing discovery...");
+    discovery_publisher::publish_discovery(
+        &client,
+        &availability_topic,
+        &config.mqtt.discovery_prefix,
+        hostname,
+        machine_id,
+        &sensors,
+    )
+    .await
+    .context("Failed to publish discovery")?;
+    // Wait for a few seconds before publishing the first status.
+    sleep(Duration::from_secs(5)).await;
+
     let publishing = async {
         let publisher = Publisher {
-            hostname,
-            machine_id,
-            config: &config.mqtt,
             client: &client,
-            availability_topic: &availability_topic,
             sensors: &sensors,
         };
-        info!("Publishing discovery...");
-        if let Err(e) = publisher.publish_discovery().await {
-            return e.context("Failed to publish discovery");
-        }
-        // Wait for a few seconds before publishing the first status.
-        sleep(Duration::from_secs(5)).await;
-
-        if let Err(()) = discovery_signal_sender.send(()) {
-            return anyhow!("Failed to notify discovery done");
-        };
-
         let interval_duration =
             Duration::from_secs(u64::from(config.daemon.interval_in_minutes) * 60);
         let mut interval = interval(interval_duration);
@@ -100,10 +112,6 @@ async fn main() -> Result<(), Error> {
     };
 
     let sending_availability = async {
-        discovery_signal_receiver
-            .await
-            .context("Failed to receive discovery done")?;
-
         let mut interval = interval(Duration::from_secs(60));
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
         let publishing_online = async {
@@ -131,24 +139,10 @@ async fn main() -> Result<(), Error> {
         Ok::<(), Error>(())
     };
 
-    let event_loop = async move {
-        loop {
-            let event = event_loop
-                .poll()
-                .await
-                .context("Failed to poll event loop")?;
-            if let Event::Outgoing(Outgoing::Disconnect) = event {
-                break;
-            }
-        }
-        Ok::<_, Error>(())
-    };
-    pin_mut!(event_loop);
-
     select! {
         r = &mut event_loop => r.context("Event loop")?,
         r = sending_availability => r.context("Sending availability")?,
-        e = publishing => return Err(e.context("Publishing")),
+        () = publishing => unreachable!("Publishing should never complete"),
     };
     event_loop.await
 }
