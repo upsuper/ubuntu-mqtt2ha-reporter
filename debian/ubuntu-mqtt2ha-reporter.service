@@ -10,8 +10,8 @@ User=ubuntu-mqtt2ha-reporter
 Group=ubuntu-mqtt2ha-reporter
 Type=simple
 Environment=RUST_LOG=info
-ExecStart=/opt/ubuntu-mqtt2ha-reporter/ubuntu-mqtt2ha-reporter
-WorkingDirectory=/opt/ubuntu-mqtt2ha-reporter
+ExecStart=/usr/local/bin/ubuntu-mqtt2ha-reporter
+WorkingDirectory=/etc/ubuntu-mqtt2ha-reporter
 KillMode=process
 Restart=on-failure
 RestartSec=10s

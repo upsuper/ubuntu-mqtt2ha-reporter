@@ -26,3 +26,22 @@ uuid = "1"
 [dependencies.tokio]
 version = "1"
 features = ["fs", "macros", "process", "rt", "rt-multi-thread", "sync", "time"]
+
+[package.metadata.deb]
+maintainer = "Xidorn Quan <me@upsuper.org>"
+copyright = "2024, Xidorn Quan"
+license-file = ["LICENSE", "4"]
+extended-description = "A service that reports Ubuntu system status to Home Assistant via MQTT"
+depends = "$auto"
+section = "utils"
+priority = "optional"
+assets = [
+    ["target/release/ubuntu-mqtt2ha-reporter", "usr/local/bin/", "755"],
+    ["assets/config.toml", "etc/ubuntu-mqtt2ha-reporter/", "644"],
+    ["assets/20-ubuntu-mqtt2ha-reporter", "etc/sudoers.d/", "440"],
+]
+maintainer-scripts = "debian/"
+
+[package.metadata.deb.systemd-units]
+enable = true
+start = false

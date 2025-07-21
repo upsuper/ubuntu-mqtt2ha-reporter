@@ -1,0 +1,32 @@
+#!/bin/bash
+set -e
+
+# Create system user and group if they don't exist
+if ! getent group ubuntu-mqtt2ha-reporter >/dev/null; then
+    addgroup --system ubuntu-mqtt2ha-reporter
+fi
+
+if ! getent passwd ubuntu-mqtt2ha-reporter >/dev/null; then
+    adduser --system --ingroup ubuntu-mqtt2ha-reporter \
+        --home /var/lib/ubuntu-mqtt2ha-reporter \
+        --no-create-home \
+        --gecos "Ubuntu MQTT2HA Reporter" \
+        --shell /bin/false \
+        ubuntu-mqtt2ha-reporter
+fi
+
+# Create home directory and set permissions
+mkdir -p /var/lib/ubuntu-mqtt2ha-reporter
+chown ubuntu-mqtt2ha-reporter:ubuntu-mqtt2ha-reporter /var/lib/ubuntu-mqtt2ha-reporter
+chmod 755 /var/lib/ubuntu-mqtt2ha-reporter
+
+# Set proper permissions on config directory
+chown -R root:ubuntu-mqtt2ha-reporter /etc/ubuntu-mqtt2ha-reporter
+chmod 750 /etc/ubuntu-mqtt2ha-reporter
+chmod 640 /etc/ubuntu-mqtt2ha-reporter/config.toml
+
+#DEBHELPER#
+
+echo "Ubuntu MQTT2HA Reporter has been installed."
+echo "Please edit /etc/ubuntu-mqtt2ha-reporter/config.toml to configure your MQTT broker settings."
+echo "Then start the service with: sudo systemctl start ubuntu-mqtt2ha-reporter"

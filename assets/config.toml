@@ -1,0 +1,43 @@
+# Ubuntu MQTT to Home Assistant Reporter Configuration
+# This file contains all configuration options for the ubuntu-mqtt2ha-reporter service.
+# All values shown are the defaults and can be uncommented and modified as needed.
+
+[daemon]
+# Fixed interval in minutes to report status to broker
+# This determines how often the service will send updates to Home Assistant
+#interval_in_minutes = 5
+
+[mqtt]
+# The hostname or IP address of the MQTT broker to connect to
+#hostname = "localhost"
+
+# The TCP port the MQTT broker is listening on
+# Standard MQTT port is 1883, MQTT over TLS/SSL is typically 8883
+#port = 1883
+
+# Maximum period in seconds between ping messages to the broker
+# This helps maintain the connection and detect network issues
+#keep_alive = 60
+
+# Enable TLS/SSL on the connection
+# Set to true if your MQTT broker requires encrypted connections
+#tls = false
+
+# Path to CA certificate file to verify the MQTT broker's certificate
+# Only needed when using TLS and the broker uses a self-signed certificate
+# or a certificate from a non-standard CA
+#tls_ca_cert = ""
+
+# MQTT broker authentication credentials
+# Leave commented out if your broker doesn't require authentication
+#username = ""
+#password = ""
+
+# Home Assistant MQTT discovery prefix
+# By default, Home Assistant listens to the 'homeassistant' topic
+# Change this if you've configured Home Assistant to use a different discovery prefix
+#discovery_prefix = "homeassistant"
+
+# The MQTT base topic under which to publish the sensor data topics
+# The actual topic used for this device will be: {base_topic}/{sensor_name}
+#base_topic = "home/nodes"

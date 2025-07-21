@@ -1,0 +1,25 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    purge)
+        # Remove system user and group on purge
+        if getent passwd ubuntu-mqtt2ha-reporter >/dev/null; then
+            deluser ubuntu-mqtt2ha-reporter
+        fi
+
+        if getent group ubuntu-mqtt2ha-reporter >/dev/null; then
+            delgroup ubuntu-mqtt2ha-reporter
+        fi
+
+        # Remove home directory
+        rm -rf /var/lib/ubuntu-mqtt2ha-reporter
+
+        # Remove config directory if empty
+        rmdir /etc/ubuntu-mqtt2ha-reporter 2>/dev/null || true
+        ;;
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+esac
+
+#DEBHELPER#
