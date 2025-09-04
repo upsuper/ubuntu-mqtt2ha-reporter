@@ -1,5 +1,5 @@
 use crate::command::{Command, CommandDiscovery, CommandDiscoveryInit};
-use anyhow::{anyhow, Context, Error};
+use anyhow::{Context, Error, anyhow};
 use log::info;
 use std::borrow::Cow;
 use tokio::process;
@@ -24,12 +24,14 @@ impl Command for RebootCommand {
     }
 
     fn discovery_data(&self) -> Vec<CommandDiscovery<'_>> {
-        vec![CommandDiscovery::new(CommandDiscoveryInit {
-            id: ID,
-            name: "Reboot System",
-            icon: "mdi:restart",
-        })
-        .with_device_class("restart")]
+        vec![
+            CommandDiscovery::new(CommandDiscoveryInit {
+                id: ID,
+                name: "Reboot System",
+                icon: "mdi:restart",
+            })
+            .with_device_class("restart"),
+        ]
     }
 
     async fn execute(&self) -> Result<(), Error> {

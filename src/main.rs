@@ -2,7 +2,7 @@ use crate::commands::create_commands;
 use crate::config::{Config, Mqtt};
 use crate::sensors::create_sensors;
 use crate::utils::snake_case::make_snake_case;
-use anyhow::{anyhow, Context as _, Error};
+use anyhow::{Context as _, Error, anyhow};
 use futures_util::TryFutureExt;
 use log::{debug, info, trace, warn};
 use mimalloc::MiMalloc;
@@ -14,7 +14,7 @@ use std::{fs, thread};
 use tokio::select;
 use tokio::sync::mpsc::error::TrySendError;
 use tokio::sync::{mpsc, oneshot};
-use tokio::time::{interval, sleep, timeout, MissedTickBehavior};
+use tokio::time::{MissedTickBehavior, interval, sleep, timeout};
 
 mod command;
 mod command_subscriber;

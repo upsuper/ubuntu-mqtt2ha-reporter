@@ -2,12 +2,12 @@ use crate::ha::values::{EntityCategory, StateClass};
 use crate::sensor::{Sensor, SensorDiscovery, SensorDiscoveryInit};
 use crate::utils::parser::{parse_next_field, parse_next_field_opt};
 use anyhow::{Context, Error};
-use nix::unistd::{sysconf, SysconfVar};
+use nix::unistd::{SysconfVar, sysconf};
 use serde::Serialize;
 use std::fs;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
-use tokio::sync::{watch, Mutex};
+use tokio::sync::{Mutex, watch};
 
 const ID: &str = "cpu";
 
@@ -241,7 +241,7 @@ fn round_percentage(p: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_stat, AllCpuTimes, CpuTimes};
+    use super::{AllCpuTimes, CpuTimes, parse_stat};
 
     #[test]
     fn test_stat() {

@@ -1,7 +1,7 @@
 use anyhow::{Context, Error};
 use hmac_sha256::HMAC;
 use std::fs;
-use uuid::{uuid, Uuid};
+use uuid::{Uuid, uuid};
 
 const MACHINE_ID_FILE: &str = "/etc/machine-id";
 const APP_ID: Uuid = uuid!("860edfa6-72ea-11ef-99e1-dba127e5de37");

@@ -1,11 +1,11 @@
 use crate::ha::values::{DeviceClass, StateClass};
 use crate::sensor::{Sensor, SensorDiscovery, SensorDiscoveryInit};
-use anyhow::{bail, Context, Error};
+use anyhow::{Context, Error, bail};
 use serde::ser::SerializeMap;
 use serde::{Serialize, Serializer};
 use std::fs;
 use std::time::{Duration, Instant};
-use tokio::sync::{watch, Mutex};
+use tokio::sync::{Mutex, watch};
 
 const ID: &str = "net";
 
@@ -217,7 +217,7 @@ impl DeviceStatus {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_device_status, serialize_as_map, DeviceStatus};
+    use super::{DeviceStatus, parse_device_status, serialize_as_map};
     use serde::Serialize;
 
     #[test]

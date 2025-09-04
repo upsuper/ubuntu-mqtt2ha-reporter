@@ -3,8 +3,8 @@ use crate::sensor::{Sensor, SensorDiscovery, SensorDiscoveryInit};
 use anyhow::Error;
 use serde::ser::Error as _;
 use serde::{Serialize, Serializer};
-use time::format_description::well_known::Iso8601;
 use time::OffsetDateTime;
+use time::format_description::well_known::Iso8601;
 
 const ID: &str = "monitor";
 
@@ -27,14 +27,16 @@ impl Sensor for MonitorSensor {
     }
 
     fn discovery_data(&self) -> Vec<SensorDiscovery<'_>> {
-        vec![SensorDiscovery::new(SensorDiscoveryInit {
-            id: ID,
-            title: "Updated",
-            icon: "mdi:timer",
-            value_template: "{{ value_json }}",
-        })
-        .with_entity_category(EntityCategory::Diagnostic)
-        .with_device_class(DeviceClass::Timestamp)]
+        vec![
+            SensorDiscovery::new(SensorDiscoveryInit {
+                id: ID,
+                title: "Updated",
+                icon: "mdi:timer",
+                value_template: "{{ value_json }}",
+            })
+            .with_entity_category(EntityCategory::Diagnostic)
+            .with_device_class(DeviceClass::Timestamp),
+        ]
     }
 
     async fn get_status(&self) -> Result<Self::Payload, Error> {

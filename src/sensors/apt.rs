@@ -1,6 +1,6 @@
 use crate::ha::values::StateClass;
 use crate::sensor::{Sensor, SensorDiscovery, SensorDiscoveryInit};
-use anyhow::{ensure, Context, Error};
+use anyhow::{Context, Error, ensure};
 use regex::Regex;
 use serde::Serialize;
 use std::process::Stdio;
@@ -29,14 +29,16 @@ impl Sensor for AptSensor {
     }
 
     fn discovery_data(&self) -> Vec<SensorDiscovery<'_>> {
-        vec![SensorDiscovery::new(SensorDiscoveryInit {
-            id: ID,
-            title: "APT pending upgrades",
-            icon: "mdi:update",
-            value_template: "{{ value_json.state }}",
-        })
-        .with_state_class(StateClass::Measurement)
-        .with_attributes("{{ value_json.attrs | tojson }}")]
+        vec![
+            SensorDiscovery::new(SensorDiscoveryInit {
+                id: ID,
+                title: "APT pending upgrades",
+                icon: "mdi:update",
+                value_template: "{{ value_json.state }}",
+            })
+            .with_state_class(StateClass::Measurement)
+            .with_attributes("{{ value_json.attrs | tojson }}"),
+        ]
     }
 
     async fn get_status(&self) -> Result<Self::Payload, Error> {

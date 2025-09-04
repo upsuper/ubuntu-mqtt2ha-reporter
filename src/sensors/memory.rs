@@ -1,6 +1,6 @@
 use crate::ha::values::{DeviceClass, EntityCategory, StateClass};
 use crate::sensor::{Sensor, SensorDiscovery, SensorDiscoveryInit};
-use anyhow::{ensure, Context, Error};
+use anyhow::{Context, Error, ensure};
 use serde::Serialize;
 use std::fs;
 
@@ -151,7 +151,7 @@ fn parse_value(s: &str) -> Result<u64, Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_mem_info, MemInfo};
+    use super::{MemInfo, parse_mem_info};
 
     #[test]
     fn test_parse_mem_info() {

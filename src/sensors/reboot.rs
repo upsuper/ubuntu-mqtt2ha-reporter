@@ -30,14 +30,16 @@ impl Sensor for RebootSensor {
     }
 
     fn discovery_data(&self) -> Vec<SensorDiscovery<'_>> {
-        vec![SensorDiscovery::new(SensorDiscoveryInit {
-            id: ID,
-            title: "Reboot required",
-            icon: "mdi:restart",
-            value_template: "{{ 'ON' if value_json.state else 'OFF' }}",
-        })
-        .with_binary(true)
-        .with_attributes("{{ value_json.attrs | tojson }}")]
+        vec![
+            SensorDiscovery::new(SensorDiscoveryInit {
+                id: ID,
+                title: "Reboot required",
+                icon: "mdi:restart",
+                value_template: "{{ 'ON' if value_json.state else 'OFF' }}",
+            })
+            .with_binary(true)
+            .with_attributes("{{ value_json.attrs | tojson }}"),
+        ]
     }
 
     async fn get_status(&self) -> Result<Self::Payload, Error> {
