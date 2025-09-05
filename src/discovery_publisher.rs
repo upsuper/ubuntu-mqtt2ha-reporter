@@ -27,7 +27,10 @@ pub async fn publish_discovery(
         apt_sensor,
         reboot_sensor,
     } = sensors;
-    let Commands { reboot_command } = commands;
+    let Commands {
+        reboot_command,
+        suspend_command,
+    } = commands;
     let hostname_snake = make_snake_case(hostname);
     let device = Device {
         name: Some(hostname),
@@ -51,6 +54,7 @@ pub async fn publish_discovery(
         publisher.publish_sensor(apt_sensor),
         publisher.publish_sensor(reboot_sensor),
         publisher.publish_command(reboot_command),
+        publisher.publish_command(suspend_command),
     )?;
 
     Ok(())

@@ -12,11 +12,16 @@ pub struct CommandSubscriber<'a> {
 
 enum CommandType {
     Reboot,
+    Suspend,
 }
 
 impl<'a> CommandSubscriber<'a> {
     pub fn new(commands: &'a Commands) -> Self {
-        let topic_to_command = [(commands.reboot_command.topic(), CommandType::Reboot)].into();
+        let topic_to_command = [
+            (commands.reboot_command.topic(), CommandType::Reboot),
+            (commands.suspend_command.topic(), CommandType::Suspend),
+        ]
+        .into();
         Self {
             commands,
             topic_to_command,
@@ -41,6 +46,11 @@ impl<'a> CommandSubscriber<'a> {
             Some(&CommandType::Reboot) => {
                 if let Err(e) = self.commands.reboot_command.execute().await {
                     error!("Failed to execute reboot command: {e}");
+                }
+            }
+            Some(&CommandType::Suspend) => {
+                if let Err(e) = self.commands.suspend_command.execute().await {
+                    error!("Failed to execute suspend command: {e}");
                 }
             }
             None => warn!("Received message on unknown topic {topic}"),
