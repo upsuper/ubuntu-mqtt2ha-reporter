@@ -1,13 +1,12 @@
 use crate::command::{Command, CommandDiscovery, CommandDiscoveryInit};
 use anyhow::{Context, Error, anyhow};
 use log::info;
-use std::borrow::Cow;
 use tokio::process;
 
 const ID: &str = "reboot";
 
 pub struct RebootCommand {
-    topic: Cow<'static, str>,
+    topic: Box<str>,
 }
 
 impl RebootCommand {
