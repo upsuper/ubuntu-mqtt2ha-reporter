@@ -190,6 +190,9 @@ fn build_mqtt_options(hostname: &str, config: &Mqtt) -> Result<MqttOptions, Erro
 
     let mut options = MqttOptions::new(hostname, &config.hostname, config.port);
     options.set_keep_alive(Duration::from_secs(config.keep_alive));
+    // Adjust the max package size. Mosquitto defaults to unlimited, but rumqttc defaults to 10KB,
+    // which is too small for device discovery messages.
+    options.set_max_packet_size(100 * 1024, 100 * 1024);
     if config.tls {
         options.set_transport(match &config.tls_ca_cert {
             Some(path) => {

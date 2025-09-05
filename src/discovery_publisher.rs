@@ -1,19 +1,22 @@
 use crate::command::Command;
 use crate::commands::Commands;
-use crate::ha::discovery::{Device, HaButtonDiscovery, HaSensorDiscovery};
+use crate::ha::discovery::{
+    Device, HaButtonDiscovery, HaComponentDiscovery, HaDeviceDiscovery, HaSensorDiscovery, Origin,
+};
 use crate::sensor::Sensor;
 use crate::sensors::Sensors;
 use crate::utils::snake_case::make_snake_case;
 use anyhow::{Context as _, Error};
 use log::debug;
 use rumqttc::{AsyncClient, QoS};
+use std::borrow::Cow;
 
 pub async fn publish_discovery(
     client: &AsyncClient,
     availability_topic: &str,
     discovery_prefix: &str,
-    hostname: &str,
-    machine_id: &str,
+    hostname: &'static str,
+    machine_id: &'static str,
     sensors: &Sensors,
     commands: &Commands,
 ) -> Result<(), Error> {
@@ -31,100 +34,78 @@ pub async fn publish_discovery(
         reboot_command,
         suspend_command,
     } = commands;
+
     let hostname_snake = make_snake_case(hostname);
+    let discovery_topic = format!("{discovery_prefix}/device/{hostname_snake}/config");
+
+    // Construct payload of discovery message
     let device = Device {
-        name: Some(hostname),
+        name: hostname,
         identifiers: &[machine_id],
     };
-    let publisher = DiscoveryPublisher {
-        client,
-        availability_topic,
-        discovery_prefix,
-        hostname_snake: &hostname_snake,
-        device: &device,
+    let origin = Origin {
+        name: env!("CARGO_PKG_NAME"),
+        sw_version: env!("CARGO_PKG_VERSION"),
     };
+    let components = {
+        let mut collector = ComponentCollector::new(&hostname_snake);
+        collector.add_sensor(monitor_sensor);
+        collector.add_sensor(cpu_sensor);
+        collector.add_sensor(memory_sensor);
+        collector.add_sensor(disk_sensor);
+        collector.add_sensor(load_sensor);
+        collector.add_sensor(net_sensor);
+        collector.add_sensor(apt_sensor);
+        collector.add_sensor(reboot_sensor);
+        collector.add_command(reboot_command);
+        collector.add_command(suspend_command);
+        collector.result
+    };
+    let discovery = HaDeviceDiscovery {
+        device,
+        origin,
+        availability_topic,
+        components: &components,
+    };
+    let payload = serde_json::to_string(&discovery).unwrap();
 
-    tokio::try_join!(
-        publisher.publish_sensor(monitor_sensor),
-        publisher.publish_sensor(cpu_sensor),
-        publisher.publish_sensor(memory_sensor),
-        publisher.publish_sensor(disk_sensor),
-        publisher.publish_sensor(load_sensor),
-        publisher.publish_sensor(net_sensor),
-        publisher.publish_sensor(apt_sensor),
-        publisher.publish_sensor(reboot_sensor),
-        publisher.publish_command(reboot_command),
-        publisher.publish_command(suspend_command),
-    )?;
+    debug!("Publishing {} to {}", payload, discovery_topic);
+    client
+        .publish(discovery_topic, QoS::AtLeastOnce, true, payload)
+        .await
+        .with_context(|| format!("Failed to publish discovery"))?;
 
     Ok(())
 }
 
-struct DiscoveryPublisher<'a> {
-    client: &'a AsyncClient,
-    availability_topic: &'a str,
-    discovery_prefix: &'a str,
+struct ComponentCollector<'a> {
     hostname_snake: &'a str,
-    device: &'a Device<'a>,
+    result: Vec<(Cow<'a, str>, HaComponentDiscovery<'a>)>,
 }
 
-impl<'a> DiscoveryPublisher<'a> {
-    async fn publish_sensor<S: Sensor>(&self, sensor: &S) -> Result<(), Error> {
-        for item in sensor.discovery_data() {
-            let sensor_id = format!("{}_{}", self.hostname_snake, item.id);
-            let discovery_topic = {
-                let prefix = self.discovery_prefix;
-                let sensor_type = if item.binary {
-                    "binary_sensor"
-                } else {
-                    "sensor"
-                };
-                format!("{prefix}/{sensor_type}/{sensor_id}/config")
-            };
-            let payload = {
-                let discovery = HaSensorDiscovery::new(
-                    &sensor_id,
-                    sensor.topic(),
-                    &item,
-                    self.availability_topic,
-                    self.device,
-                );
-                serde_json::to_string(&discovery).unwrap()
-            };
-            debug!("Publishing {} to {}", payload, discovery_topic);
-            self.client
-                .publish(discovery_topic, QoS::AtLeastOnce, true, payload)
-                .await
-                .with_context(|| format!("Failed to publish discovery for sensor {}", item.id))?;
+impl<'a> ComponentCollector<'a> {
+    fn new(hostname_snake: &'a str) -> Self {
+        Self {
+            hostname_snake,
+            result: Vec::new(),
         }
-
-        Ok(())
     }
 
-    async fn publish_command<C: Command>(&self, command: &C) -> Result<(), Error> {
-        for item in command.discovery_data() {
-            let command_id = format!("{}_{}", self.hostname_snake, item.id);
-            let discovery_topic = {
-                let prefix = self.discovery_prefix;
-                format!("{prefix}/button/{command_id}/config")
-            };
-            let payload = {
-                let discovery = HaButtonDiscovery::new(
-                    &command_id,
-                    command.topic(),
-                    &item,
-                    self.availability_topic,
-                    self.device,
-                );
-                serde_json::to_string(&discovery).unwrap()
-            };
-            debug!("Publishing {} to {}", payload, discovery_topic);
-            self.client
-                .publish(discovery_topic, QoS::AtLeastOnce, true, payload)
-                .await
-                .with_context(|| format!("Failed to publish discovery for command {}", item.id))?;
-        }
+    fn add_sensor<S: Sensor>(&mut self, sensor: &'a S) {
+        self.result
+            .extend(sensor.discovery_data().into_iter().map(|item| {
+                let sensor_id = format!("{}_{}", self.hostname_snake, item.id);
+                let (id, discovery) = HaSensorDiscovery::new(sensor_id, sensor.topic(), item);
+                (id, HaComponentDiscovery::Sensor(discovery))
+            }));
+    }
 
-        Ok(())
+    fn add_command<C: Command>(&mut self, command: &'a C) {
+        self.result
+            .extend(command.discovery_data().into_iter().map(|item| {
+                let command_id = format!("{}_{}", self.hostname_snake, item.id);
+                let (id, discovery) = HaButtonDiscovery::new(command_id, command.topic(), item);
+                (id, HaComponentDiscovery::Button(discovery))
+            }));
     }
 }

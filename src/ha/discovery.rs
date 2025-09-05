@@ -1,14 +1,44 @@
+use std::borrow::Cow;
+
 use crate::command::CommandDiscovery;
 use crate::ha::values::{DeviceClass, EntityCategory, StateClass};
 use crate::sensor::SensorDiscovery;
+use crate::utils::serialize::serialize_as_map;
 use bitflags::bitflags;
 use serde::Serialize;
 
 #[derive(Serialize)]
+pub struct HaDeviceDiscovery<'a> {
+    pub device: Device<'a>,
+    pub origin: Origin,
+    pub availability_topic: &'a str,
+    #[serde(serialize_with = "serialize_as_map")]
+    pub components: &'a [(Cow<'a, str>, HaComponentDiscovery<'a>)],
+}
+
+#[derive(Serialize)]
+pub struct Device<'a> {
+    pub name: &'static str,
+    pub identifiers: &'a [&'static str],
+}
+
+#[derive(Serialize)]
+pub struct Origin {
+    pub name: &'static str,
+    pub sw_version: &'static str,
+}
+
+#[derive(Serialize)]
+#[serde(tag = "platform", rename_all = "snake_case")]
+pub enum HaComponentDiscovery<'a> {
+    Sensor(HaSensorDiscovery<'a>),
+    Button(HaButtonDiscovery<'a>),
+}
+
+#[derive(Serialize)]
 pub struct HaSensorDiscovery<'a> {
-    unique_id: &'a str,
-    availability_topic: &'a str,
-    name: &'a str,
+    unique_id: String,
+    name: Cow<'a, str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     icon: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -23,43 +53,40 @@ pub struct HaSensorDiscovery<'a> {
     suggested_display_precision: Option<i32>,
 
     state_topic: &'a str,
-    value_template: &'a str,
+    value_template: Cow<'a, str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     json_attributes_topic: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     json_attributes_template: Option<&'static str>,
-
-    device: &'a Device<'a>,
 }
 
 impl<'a> HaSensorDiscovery<'a> {
     pub fn new(
-        unique_id: &'a str,
+        unique_id: String,
         topic: &'a str,
-        discovery: &'a SensorDiscovery,
-        availability_topic: &'a str,
-        device: &'a Device<'a>,
-    ) -> Self {
+        discovery: SensorDiscovery<'a>,
+    ) -> (Cow<'a, str>, Self) {
         let (attrs_topic, attrs_tpl) = match discovery.attributes_template {
             Some(tpl) => (Some(topic), Some(tpl)),
             None => (None, None),
         };
-        HaSensorDiscovery {
-            unique_id,
-            availability_topic,
-            name: &discovery.title,
-            icon: discovery.icon,
-            entity_category: discovery.entity_category,
-            device_class: discovery.device_class,
-            state_class: discovery.state_class,
-            unit_of_measurement: discovery.unit_of_measurement,
-            suggested_display_precision: discovery.suggested_display_precision,
-            state_topic: topic,
-            value_template: &discovery.value_template,
-            json_attributes_topic: attrs_topic,
-            json_attributes_template: attrs_tpl,
-            device,
-        }
+        (
+            discovery.id,
+            HaSensorDiscovery {
+                unique_id,
+                name: discovery.title,
+                icon: discovery.icon,
+                entity_category: discovery.entity_category,
+                device_class: discovery.device_class,
+                state_class: discovery.state_class,
+                unit_of_measurement: discovery.unit_of_measurement,
+                suggested_display_precision: discovery.suggested_display_precision,
+                state_topic: topic,
+                value_template: discovery.value_template,
+                json_attributes_topic: attrs_topic,
+                json_attributes_template: attrs_tpl,
+            },
+        )
     }
 }
 
@@ -73,39 +100,30 @@ bitflags! {
 
 #[derive(Serialize)]
 pub struct HaButtonDiscovery<'a> {
-    unique_id: &'a str,
-    availability_topic: &'a str,
-    name: &'a str,
+    unique_id: String,
+    name: Cow<'a, str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     icon: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     device_class: Option<&'static str>,
     command_topic: &'a str,
-    device: &'a Device<'a>,
 }
 
 impl<'a> HaButtonDiscovery<'a> {
     pub fn new(
-        unique_id: &'a str,
+        unique_id: String,
         command_topic: &'a str,
-        discovery: &'a CommandDiscovery,
-        availability_topic: &'a str,
-        device: &'a Device<'a>,
-    ) -> Self {
-        HaButtonDiscovery {
-            unique_id,
-            availability_topic,
-            name: &discovery.name,
-            icon: discovery.icon,
-            device_class: discovery.device_class,
-            command_topic,
-            device,
-        }
+        discovery: CommandDiscovery<'a>,
+    ) -> (Cow<'a, str>, Self) {
+        (
+            discovery.id,
+            HaButtonDiscovery {
+                unique_id,
+                name: discovery.name,
+                icon: discovery.icon,
+                device_class: discovery.device_class,
+                command_topic,
+            },
+        )
     }
-}
-
-#[derive(Serialize)]
-pub struct Device<'a> {
-    pub name: Option<&'a str>,
-    pub identifiers: &'a [&'a str],
 }
