@@ -5,16 +5,14 @@ use crate::utils::snake_case::make_snake_case;
 use crate::{command_subscriber, commands::Commands};
 use crate::{discovery_publisher, sensor_publisher};
 use anyhow::{Context as _, Error, anyhow};
+use backoff::ExponentialBackoff;
 use futures_util::TryFutureExt;
 use log::{debug, info, warn};
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, Outgoing, QoS};
-use std::fs;
 use std::time::Duration;
+use std::{fmt, fs};
 use tokio::select;
-use tokio::sync::{
-    mpsc::{self, error::TrySendError},
-    oneshot::Receiver,
-};
+use tokio::sync::mpsc::{self, error::TrySendError};
 use tokio::time::{MissedTickBehavior, interval, sleep, timeout};
 
 pub struct MainLoop {
@@ -49,8 +47,22 @@ impl MainLoop {
         })
     }
 
-    pub async fn run(&self, stop: Receiver<()>) -> Result<(), Error> {
-        let (client, mut event_loop) = AsyncClient::new(self.options.clone(), 10);
+    pub async fn run(&self, stop: impl Future<Output = StopReason>) -> Result<(), Error> {
+        let backoff = ExponentialBackoff::default();
+        let (client, mut event_loop) = backoff::future::retry(backoff, || async {
+            let (client, mut event_loop) = AsyncClient::new(self.options.clone(), 10);
+            loop {
+                match event_loop.poll().await {
+                    Ok(Event::Incoming(Incoming::ConnAck(_))) => break Ok((client, event_loop)),
+                    Ok(_) => {}
+                    Err(e) => {
+                        warn!("Failed to connect to MQTT: {}", e);
+                        break Err(backoff::Error::transient(e));
+                    }
+                }
+            }
+        })
+        .await?;
         let (msg_sender, mut msg_receiver) = mpsc::channel(8);
         let mut event_loop = tokio::spawn(async move {
             loop {
@@ -152,7 +164,7 @@ impl MainLoop {
             };
             select! {
                 e = publishing_online => return Err(e.context("Failed to publish online")),
-                s = stop => s.context("Failed to receive stop signal")?,
+                reason = stop => info!("Stopping for {}...", reason),
             }
             debug!("Sending offline message");
             client
@@ -191,4 +203,18 @@ fn build_mqtt_options(hostname: &str, config: &Mqtt) -> Result<MqttOptions, Erro
         options.set_credentials(username, config.password.as_deref().unwrap_or(""));
     }
     Ok(options)
+}
+
+pub enum StopReason {
+    Shutdown,
+    Sleep,
+}
+
+impl fmt::Display for StopReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StopReason::Shutdown => write!(f, "shutting down"),
+            StopReason::Sleep => write!(f, "sleeping"),
+        }
+    }
 }
