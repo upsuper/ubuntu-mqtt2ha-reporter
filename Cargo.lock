@@ -1456,6 +1456,7 @@ name = "ubuntu-mqtt2ha-reporter"
 version = "0.1.2"
 dependencies = [
  "anyhow",
+ "async-trait",
  "backoff",
  "bitflags",
  "futures-util",

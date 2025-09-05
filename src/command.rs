@@ -1,7 +1,9 @@
 use anyhow::Error;
+use async_trait::async_trait;
 use serde::Serialize;
 use std::borrow::Cow;
 
+#[async_trait]
 pub trait Command: 'static {
     fn topic(&self) -> &str;
     fn discovery_data(&self) -> Vec<CommandDiscovery<'_>>;

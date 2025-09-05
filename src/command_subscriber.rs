@@ -1,4 +1,4 @@
-use crate::command::Command as _;
+use crate::command::Command;
 use crate::commands::Commands;
 use anyhow::{Context, Error};
 use log::{debug, error, warn};
@@ -6,26 +6,23 @@ use rumqttc::{AsyncClient, QoS};
 use std::collections::HashMap;
 
 pub struct CommandSubscriber<'a> {
-    commands: &'a Commands,
-    topic_to_command: HashMap<&'a str, CommandType>,
-}
-
-enum CommandType {
-    Reboot,
-    Suspend,
+    topic_to_command: HashMap<&'a str, &'a dyn Command>,
 }
 
 impl<'a> CommandSubscriber<'a> {
     pub fn new(commands: &'a Commands) -> Self {
         let topic_to_command = [
-            (commands.reboot_command.topic(), CommandType::Reboot),
-            (commands.suspend_command.topic(), CommandType::Suspend),
+            (
+                commands.reboot_command.topic(),
+                &commands.reboot_command as &dyn Command,
+            ),
+            (
+                commands.suspend_command.topic(),
+                &commands.suspend_command as &dyn Command,
+            ),
         ]
         .into();
-        Self {
-            commands,
-            topic_to_command,
-        }
+        Self { topic_to_command }
     }
 
     pub async fn subscribe_to_commands(&self, client: &AsyncClient) -> Result<(), Error> {
@@ -43,14 +40,10 @@ impl<'a> CommandSubscriber<'a> {
         debug!("Received command message on {topic}");
 
         match self.topic_to_command.get(topic) {
-            Some(&CommandType::Reboot) => {
-                if let Err(e) = self.commands.reboot_command.execute().await {
-                    error!("Failed to execute reboot command: {e}");
-                }
-            }
-            Some(&CommandType::Suspend) => {
-                if let Err(e) = self.commands.suspend_command.execute().await {
-                    error!("Failed to execute suspend command: {e}");
+            Some(command) => {
+                if let Err(e) = command.execute().await {
+                    let (_, id) = command.topic().rsplit_once('/').unwrap();
+                    error!("Failed to execute command {id}: {e}");
                 }
             }
             None => warn!("Received message on unknown topic {topic}"),

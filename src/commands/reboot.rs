@@ -1,5 +1,6 @@
 use crate::command::{Command, CommandDiscovery, CommandDiscoveryInit};
 use anyhow::{Context, Error, anyhow};
+use async_trait::async_trait;
 use log::info;
 use tokio::process;
 
@@ -17,6 +18,7 @@ impl RebootCommand {
     }
 }
 
+#[async_trait]
 impl Command for RebootCommand {
     fn topic(&self) -> &str {
         &self.topic
