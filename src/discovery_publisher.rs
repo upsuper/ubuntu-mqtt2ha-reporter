@@ -75,7 +75,7 @@ pub async fn publish_discovery(
     client
         .publish(discovery_topic, QoS::AtLeastOnce, true, payload)
         .await
-        .with_context(|| format!("Failed to publish discovery"))?;
+        .context("Failed to publish discovery")?;
 
     Ok(())
 }
