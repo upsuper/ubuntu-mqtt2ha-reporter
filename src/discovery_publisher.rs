@@ -6,6 +6,7 @@ use crate::ha::discovery::{
 use crate::sensor::Sensor;
 use crate::sensors::Sensors;
 use crate::utils::snake_case::make_snake_case;
+use crate::HostInformation;
 use anyhow::{Context as _, Error};
 use log::debug;
 use rumqttc::{AsyncClient, QoS};
@@ -15,9 +16,7 @@ pub async fn publish_discovery(
     client: &AsyncClient,
     availability_topic: &str,
     discovery_prefix: &str,
-    hostname: &'static str,
-    machine_id: &'static str,
-    connections: &[(&'static str, String)],
+    host_info: &HostInformation,
     sensors: &Sensors,
     commands: &Commands,
 ) -> Result<(), Error> {
@@ -36,14 +35,14 @@ pub async fn publish_discovery(
         suspend_command,
     } = commands;
 
-    let hostname_snake = make_snake_case(hostname);
+    let hostname_snake = make_snake_case(host_info.hostname);
     let discovery_topic = format!("{discovery_prefix}/device/{hostname_snake}/config");
 
     // Construct payload of discovery message
     let device = Device {
-        name: hostname,
-        identifiers: &[machine_id],
-        connections,
+        name: host_info.hostname,
+        identifiers: &[host_info.machine_id],
+        connections: &host_info.connections,
     };
     let origin = Origin {
         name: env!("CARGO_PKG_NAME"),

@@ -3,7 +3,7 @@ use crate::config::{Config, Mqtt};
 use crate::sensors::{Sensors, create_sensors};
 use crate::utils::snake_case::make_snake_case;
 use crate::{command_subscriber, commands::Commands};
-use crate::{discovery_publisher, sensor_publisher};
+use crate::{discovery_publisher, sensor_publisher, HostInformation};
 use anyhow::{Context as _, Error, anyhow};
 use backoff::ExponentialBackoff;
 use futures_util::TryFutureExt;
@@ -16,9 +16,7 @@ use tokio::sync::mpsc::{self, error::TrySendError};
 use tokio::time::{MissedTickBehavior, interval, sleep, timeout};
 
 pub struct MainLoop {
-    hostname: &'static str,
-    machine_id: &'static str,
-    connections: Vec<(&'static str, String)>,
+    host_info: HostInformation,
     config: Config,
     sensors: Sensors,
     commands: Commands,
@@ -28,20 +26,16 @@ pub struct MainLoop {
 
 impl MainLoop {
     pub fn new(
-        hostname: &'static str,
-        machine_id: &'static str,
-        connections: Vec<(&'static str, String)>,
+        host_info: HostInformation,
         config: Config,
     ) -> Result<Self, Error> {
-        let topic_base = format!("{}/{}", config.mqtt.base_topic, make_snake_case(hostname));
+        let topic_base = format!("{}/{}", config.mqtt.base_topic, make_snake_case(host_info.hostname));
         let sensors = create_sensors(&topic_base)?;
         let commands = create_commands(&topic_base);
         let availability_topic = format!("{topic_base}/availability");
-        let options = build_mqtt_options(hostname, &config.mqtt)?;
+        let options = build_mqtt_options(host_info.hostname, &config.mqtt)?;
         Ok(Self {
-            hostname,
-            machine_id,
-            connections,
+            host_info,
             config,
             sensors,
             commands,
@@ -118,9 +112,7 @@ impl MainLoop {
             &client,
             &self.availability_topic,
             &self.config.mqtt.discovery_prefix,
-            self.hostname,
-            self.machine_id,
-            &self.connections,
+            &self.host_info,
             &self.sensors,
             &self.commands,
         )

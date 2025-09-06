@@ -30,6 +30,12 @@ mod utils;
 #[global_allocator]
 static GLOBAL_ALLOCATOR: MiMalloc = MiMalloc;
 
+struct HostInformation {
+    hostname: &'static str,
+    machine_id: &'static str,
+    connections: Vec<(&'static str, String)>,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     pretty_env_logger::init();
@@ -45,6 +51,11 @@ async fn main() -> Result<(), Error> {
         "Connections: {}",
         connections::Display(connections.as_slice()),
     );
+    let host_info = HostInformation {
+        hostname,
+        machine_id,
+        connections,
+    };
 
     info!("Reading config...");
     let config = fs::read_to_string("config.toml").context("Could not read config.toml")?;
@@ -66,7 +77,7 @@ async fn main() -> Result<(), Error> {
     let sleep_events = sleep_monitor.start_monitoring().await?;
     pin_mut!(sleep_events);
 
-    let main_loop = main_loop::MainLoop::new(hostname, machine_id, connections, config)?;
+    let main_loop = main_loop::MainLoop::new(host_info, config)?;
     loop {
         let stop = async {
             select! {
