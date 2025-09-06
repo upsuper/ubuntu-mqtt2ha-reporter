@@ -17,6 +17,7 @@ pub async fn publish_discovery(
     discovery_prefix: &str,
     hostname: &'static str,
     machine_id: &'static str,
+    connections: &[(&'static str, String)],
     sensors: &Sensors,
     commands: &Commands,
 ) -> Result<(), Error> {
@@ -42,6 +43,7 @@ pub async fn publish_discovery(
     let device = Device {
         name: hostname,
         identifiers: &[machine_id],
+        connections,
     };
     let origin = Origin {
         name: env!("CARGO_PKG_NAME"),

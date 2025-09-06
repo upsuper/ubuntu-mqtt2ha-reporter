@@ -16,6 +16,7 @@ mod command;
 mod command_subscriber;
 mod commands;
 mod config;
+mod connections;
 mod discovery_publisher;
 mod ha;
 mod machine_id;
@@ -39,6 +40,11 @@ async fn main() -> Result<(), Error> {
     let machine_id = machine_id::get().context("Failed to get machine ID")?;
     let machine_id: &str = machine_id.hyphenated().to_string().leak();
     info!("Machine ID: {}", machine_id);
+    let connections = connections::get_connections().context("Failed to get connections")?;
+    info!(
+        "Connections: {}",
+        connections::Display(connections.as_slice()),
+    );
 
     info!("Reading config...");
     let config = fs::read_to_string("config.toml").context("Could not read config.toml")?;
@@ -60,7 +66,7 @@ async fn main() -> Result<(), Error> {
     let sleep_events = sleep_monitor.start_monitoring().await?;
     pin_mut!(sleep_events);
 
-    let main_loop = main_loop::MainLoop::new(hostname, machine_id, config)?;
+    let main_loop = main_loop::MainLoop::new(hostname, machine_id, connections, config)?;
     loop {
         let stop = async {
             select! {

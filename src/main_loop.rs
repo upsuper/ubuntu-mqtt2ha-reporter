@@ -18,6 +18,7 @@ use tokio::time::{MissedTickBehavior, interval, sleep, timeout};
 pub struct MainLoop {
     hostname: &'static str,
     machine_id: &'static str,
+    connections: Vec<(&'static str, String)>,
     config: Config,
     sensors: Sensors,
     commands: Commands,
@@ -29,6 +30,7 @@ impl MainLoop {
     pub fn new(
         hostname: &'static str,
         machine_id: &'static str,
+        connections: Vec<(&'static str, String)>,
         config: Config,
     ) -> Result<Self, Error> {
         let topic_base = format!("{}/{}", config.mqtt.base_topic, make_snake_case(hostname));
@@ -39,6 +41,7 @@ impl MainLoop {
         Ok(Self {
             hostname,
             machine_id,
+            connections,
             config,
             sensors,
             commands,
@@ -117,6 +120,7 @@ impl MainLoop {
             &self.config.mqtt.discovery_prefix,
             self.hostname,
             self.machine_id,
+            &self.connections,
             &self.sensors,
             &self.commands,
         )
