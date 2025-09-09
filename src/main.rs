@@ -91,7 +91,7 @@ async fn main() -> Result<(), Error> {
                 Err(e) => {
                     warn!("Failed to take inhibitor lock: {}", e);
                     None
-                },
+                }
             };
             main_loop.run(stop).await?;
         }

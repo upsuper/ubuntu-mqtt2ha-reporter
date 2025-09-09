@@ -35,7 +35,7 @@ fn get_mac_addresses() -> Result<Vec<String>> {
                     .addr_info
                     .iter()
                     .any(|addr| addr.scope == Scope::Global))
-                .then_some(address)
+            .then_some(address)
         })
         .collect();
     Ok(addresses)
