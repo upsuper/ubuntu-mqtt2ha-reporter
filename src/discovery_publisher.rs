@@ -10,7 +10,6 @@ use crate::utils::snake_case::make_snake_case;
 use anyhow::{Context as _, Error};
 use log::debug;
 use rumqttc::{AsyncClient, QoS};
-use std::borrow::Cow;
 
 pub async fn publish_discovery(
     client: &AsyncClient,
@@ -81,7 +80,7 @@ pub async fn publish_discovery(
 
 struct ComponentCollector<'a> {
     hostname_snake: &'a str,
-    result: Vec<(Cow<'a, str>, HaComponentDiscovery<'a>)>,
+    result: Vec<(String, HaComponentDiscovery<'a>)>,
 }
 
 impl<'a> ComponentCollector<'a> {
@@ -96,8 +95,16 @@ impl<'a> ComponentCollector<'a> {
         self.result
             .extend(sensor.discovery_data().into_iter().map(|item| {
                 let sensor_id = format!("{}_{}", self.hostname_snake, item.id);
+                let is_binary = item.binary;
                 let (id, discovery) = HaSensorDiscovery::new(sensor_id, sensor.topic(), item);
-                (id, HaComponentDiscovery::Sensor(discovery))
+                (
+                    format!("sensor_{id}"),
+                    if is_binary {
+                        HaComponentDiscovery::BinarySensor(discovery)
+                    } else {
+                        HaComponentDiscovery::Sensor(discovery)
+                    },
+                )
             }));
     }
 
@@ -106,7 +113,10 @@ impl<'a> ComponentCollector<'a> {
             .extend(command.discovery_data().into_iter().map(|item| {
                 let command_id = format!("{}_{}", self.hostname_snake, item.id);
                 let (id, discovery) = HaButtonDiscovery::new(command_id, command.topic(), item);
-                (id, HaComponentDiscovery::Button(discovery))
+                (
+                    format!("button_{}", id),
+                    HaComponentDiscovery::Button(discovery),
+                )
             }));
     }
 }

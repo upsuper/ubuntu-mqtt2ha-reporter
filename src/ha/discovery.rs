@@ -13,7 +13,7 @@ pub struct HaDeviceDiscovery<'a> {
     pub origin: Origin,
     pub availability_topic: &'a str,
     #[serde(serialize_with = "serialize_as_map")]
-    pub components: &'a [(Cow<'a, str>, HaComponentDiscovery<'a>)],
+    pub components: &'a [(String, HaComponentDiscovery<'a>)],
 }
 
 #[derive(Serialize)]
@@ -34,6 +34,7 @@ pub struct Origin {
 #[serde(tag = "platform", rename_all = "snake_case")]
 pub enum HaComponentDiscovery<'a> {
     Sensor(HaSensorDiscovery<'a>),
+    BinarySensor(HaSensorDiscovery<'a>),
     Button(HaButtonDiscovery<'a>),
 }
 
