@@ -1,3 +1,4 @@
+use crate::HostInformation;
 use crate::command::Command;
 use crate::commands::Commands;
 use crate::ha::discovery::{
@@ -6,7 +7,6 @@ use crate::ha::discovery::{
 use crate::sensor::Sensor;
 use crate::sensors::Sensors;
 use crate::utils::snake_case::make_snake_case;
-use crate::HostInformation;
 use anyhow::{Context as _, Error};
 use log::debug;
 use rumqttc::{AsyncClient, QoS};

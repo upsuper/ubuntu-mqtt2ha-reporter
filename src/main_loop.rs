@@ -2,8 +2,8 @@ use crate::commands::create_commands;
 use crate::config::{Config, Mqtt};
 use crate::sensors::{Sensors, create_sensors};
 use crate::utils::snake_case::make_snake_case;
+use crate::{HostInformation, discovery_publisher, sensor_publisher};
 use crate::{command_subscriber, commands::Commands};
-use crate::{discovery_publisher, sensor_publisher, HostInformation};
 use anyhow::{Context as _, Error, anyhow};
 use backoff::ExponentialBackoff;
 use futures_util::TryFutureExt;
@@ -25,11 +25,12 @@ pub struct MainLoop {
 }
 
 impl MainLoop {
-    pub fn new(
-        host_info: HostInformation,
-        config: Config,
-    ) -> Result<Self, Error> {
-        let topic_base = format!("{}/{}", config.mqtt.base_topic, make_snake_case(host_info.hostname));
+    pub fn new(host_info: HostInformation, config: Config) -> Result<Self> {
+        let topic_base = format!(
+            "{}/{}",
+            config.mqtt.base_topic,
+            make_snake_case(host_info.hostname)
+        );
         let sensors = create_sensors(&topic_base)?;
         let commands = create_commands(&topic_base);
         let availability_topic = format!("{topic_base}/availability");
