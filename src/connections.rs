@@ -27,12 +27,15 @@ fn get_mac_addresses() -> Result<Vec<String>> {
     let addresses = interfaces
         .into_iter()
         .filter_map(|interface| {
+            let Some(address) = interface.address else {
+                return None;
+            };
             (interface.operate_state == OperateState::Up
                 && interface
                     .addr_info
                     .iter()
                     .any(|addr| addr.scope == Scope::Global))
-            .then_some(interface.address)
+                .then_some(address)
         })
         .collect();
     Ok(addresses)
@@ -42,7 +45,7 @@ fn get_mac_addresses() -> Result<Vec<String>> {
 struct Interface {
     #[serde(rename = "operstate")]
     operate_state: OperateState,
-    address: String,
+    address: Option<String>,
     addr_info: Vec<AddrInfo>,
 }
 
