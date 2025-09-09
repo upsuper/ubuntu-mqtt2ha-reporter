@@ -4,9 +4,9 @@ use crate::sensors::{Sensors, create_sensors};
 use crate::utils::snake_case::make_snake_case;
 use crate::{HostInformation, discovery_publisher, sensor_publisher};
 use crate::{command_subscriber, commands::Commands};
-use anyhow::{Context as _, Error, anyhow};
+use anyhow::{Context as _, Error, Result, anyhow};
 use backoff::ExponentialBackoff;
-use futures_util::TryFutureExt;
+use futures_util::{FutureExt as _, TryFutureExt as _};
 use log::{debug, info, warn};
 use rumqttc::{AsyncClient, Event, Incoming, MqttOptions, Outgoing, QoS};
 use std::time::Duration;
@@ -45,7 +45,10 @@ impl MainLoop {
         })
     }
 
-    pub async fn run(&self, stop: impl Future<Output = StopReason>) -> Result<(), Error> {
+    async fn initialize(
+        &self,
+        stop: impl Future<Output = StopReason>,
+    ) -> Result<impl Future<Output = Result<()>>> {
         let backoff = ExponentialBackoff::default();
         let (client, mut event_loop) = backoff::future::retry(backoff, || async {
             let (client, mut event_loop) = AsyncClient::new(self.options.clone(), 10);
@@ -122,63 +125,83 @@ impl MainLoop {
         // Wait for a few seconds before publishing the first status.
         sleep(Duration::from_secs(5)).await;
 
-        let publishing = async {
-            let publisher = sensor_publisher::SensorPublisher {
-                client: &client,
-                sensors: &self.sensors,
-            };
-            let interval_duration =
-                Duration::from_secs(u64::from(self.config.daemon.interval_in_minutes) * 60);
-            let mut interval = interval(interval_duration);
-            interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-            // Don't let publishing breach 80% of interval.
-            let timeout_duration = interval_duration * 4 / 5;
+        let publishing = {
+            let client = client.clone();
+            async move {
+                let publisher = sensor_publisher::SensorPublisher {
+                    client: &client,
+                    sensors: &self.sensors,
+                };
+                let interval_duration =
+                    Duration::from_secs(u64::from(self.config.daemon.interval_in_minutes) * 60);
+                let mut interval = interval(interval_duration);
+                interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+                // Don't let publishing breach 80% of interval.
+                let timeout_duration = interval_duration * 4 / 5;
 
-            loop {
-                interval.tick().await;
-                match timeout(timeout_duration, publisher.publish_status()).await {
-                    Ok(()) => {}
-                    // Ignore timeout.
-                    Err(_) => warn!("Timeout publishing"),
-                }
-            }
-        };
-
-        let sending_availability = async {
-            let mut interval = interval(Duration::from_secs(60));
-            interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-            let publishing_online = async {
                 loop {
                     interval.tick().await;
-                    debug!("Sending online message");
-                    if let Err(e) = client
-                        .publish(&self.availability_topic, QoS::AtLeastOnce, false, "online")
-                        .await
-                    {
-                        break anyhow!(e).context("Failed to publish online");
+                    match timeout(timeout_duration, publisher.publish_status()).await {
+                        Ok(()) => {}
+                        // Ignore timeout.
+                        Err(_) => warn!("Timeout publishing"),
                     }
                 }
-            };
-            select! {
-                e = publishing_online => return Err(e.context("Failed to publish online")),
-                reason = stop => info!("Stopping for {}...", reason),
             }
-            debug!("Sending offline message");
-            client
-                .publish(&self.availability_topic, QoS::AtLeastOnce, false, "offline")
-                .await
-                .context("Failed to publish availability")?;
-            client.disconnect().await.context("Failed to disconnect")?;
-            Ok::<(), Error>(())
         };
 
-        select! {
-            r = &mut event_loop => r.context("Event loop")?,
-            r = sending_availability => r.context("Sending availability")?,
-            r = handling_commands => r.context("Handling commands")?,
-            () = publishing => unreachable!("Publishing should never complete"),
+        let sending_availability = {
+            let client = client.clone();
+            async move {
+                let mut interval = interval(Duration::from_secs(60));
+                interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+                let publishing_online = async {
+                    loop {
+                        interval.tick().await;
+                        debug!("Sending online message");
+                        if let Err(e) = client
+                            .publish(&self.availability_topic, QoS::AtLeastOnce, false, "online")
+                            .await
+                        {
+                            break anyhow!(e).context("Failed to publish online");
+                        }
+                    }
+                };
+                select! {
+                    e = publishing_online => return Err(e.context("Failed to publish online")),
+                    reason = stop => info!("Stopping for {}...", reason),
+                }
+                debug!("Sending offline message");
+                client
+                    .publish(&self.availability_topic, QoS::AtLeastOnce, false, "offline")
+                    .await
+                    .context("Failed to publish availability")?;
+                client.disconnect().await.context("Failed to disconnect")?;
+                Ok::<(), Error>(())
+            }
         };
-        event_loop.await
+
+        Ok(async move {
+            select! {
+                r = &mut event_loop => r.context("Event loop")?,
+                r = sending_availability => r.context("Sending availability")?,
+                r = handling_commands => r.context("Handling commands")?,
+                () = publishing => unreachable!("Publishing should never complete"),
+            };
+            event_loop.await
+        })
+    }
+
+    pub async fn run(&self, stop: impl Future<Output = StopReason>) -> Result<()> {
+        let stop = stop.shared();
+        let r = select! {
+            r = self.initialize(stop.clone()) => r?,
+            reason = stop => {
+                info!("Stopping during initialization for {}...", reason);
+                return Ok(());
+            }
+        };
+        r.await
     }
 }
 
@@ -205,6 +228,7 @@ fn build_mqtt_options(hostname: &str, config: &Mqtt) -> Result<MqttOptions, Erro
     Ok(options)
 }
 
+#[derive(Clone, Copy)]
 pub enum StopReason {
     Shutdown,
     Sleep,
