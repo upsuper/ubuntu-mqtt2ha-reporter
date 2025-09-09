@@ -29,14 +29,15 @@ pub struct Sensors {
 }
 
 pub fn create_sensors(topic_base: &str) -> Result<Sensors, Error> {
-    let monitor_sensor = MonitorSensor::new(topic_base);
-    let cpu_sensor = CpuSensor::new(topic_base).context("Failed to create CPU sensor")?;
-    let memory_sensor = MemorySensor::new(topic_base);
-    let disk_sensor = DiskSensor::new(topic_base);
-    let load_sensor = LoadSensor::new(topic_base);
-    let net_sensor = NetSensor::new(topic_base).context("Failed to create network sensor")?;
-    let apt_sensor = AptSensor::new(topic_base);
-    let reboot_sensor = RebootSensor::new(topic_base);
+    let topic_base = format!("{topic_base}/sensor");
+    let monitor_sensor = MonitorSensor::new(&topic_base);
+    let cpu_sensor = CpuSensor::new(&topic_base).context("Failed to create CPU sensor")?;
+    let memory_sensor = MemorySensor::new(&topic_base);
+    let disk_sensor = DiskSensor::new(&topic_base);
+    let load_sensor = LoadSensor::new(&topic_base);
+    let net_sensor = NetSensor::new(&topic_base).context("Failed to create network sensor")?;
+    let apt_sensor = AptSensor::new(&topic_base);
+    let reboot_sensor = RebootSensor::new(&topic_base);
     Ok(Sensors {
         monitor_sensor,
         cpu_sensor,
