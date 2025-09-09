@@ -3,7 +3,7 @@ use crate::main_loop::StopReason;
 use crate::sleep_monitor::SleepEvent;
 use anyhow::{Context as _, Error, Result, anyhow};
 use futures_util::{Stream, TryStreamExt as _, pin_mut};
-use log::{info, trace};
+use log::{info, trace, warn};
 use mimalloc::MiMalloc;
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
@@ -86,7 +86,13 @@ async fn main() -> Result<(), Error> {
             }
         };
         {
-            let _inhibitor_lock = sleep_monitor.take_inhibitor_lock().await?;
+            let _inhibitor_lock = match sleep_monitor.take_inhibitor_lock().await {
+                Ok(lock) => Some(lock),
+                Err(e) => {
+                    warn!("Failed to take inhibitor lock: {}", e);
+                    None
+                },
+            };
             main_loop.run(stop).await?;
         }
         if SHUTDOWN.get().is_some() {
