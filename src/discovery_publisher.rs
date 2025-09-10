@@ -94,7 +94,7 @@ impl<'a> ComponentCollector<'a> {
     fn add_sensor<S: Sensor>(&mut self, sensor: &'a S) {
         self.result
             .extend(sensor.discovery_data().into_iter().map(|item| {
-                let sensor_id = format!("{}_{}", self.hostname_snake, item.id);
+                let sensor_id = format!("{}_sensor_{}", self.hostname_snake, item.id);
                 let is_binary = item.binary;
                 let (id, discovery) = HaSensorDiscovery::new(sensor_id, sensor.topic(), item);
                 (
@@ -111,7 +111,7 @@ impl<'a> ComponentCollector<'a> {
     fn add_command<C: Command>(&mut self, command: &'a C) {
         self.result
             .extend(command.discovery_data().into_iter().map(|item| {
-                let command_id = format!("{}_{}", self.hostname_snake, item.id);
+                let command_id = format!("{}_command_{}", self.hostname_snake, item.id);
                 let (id, discovery) = HaButtonDiscovery::new(command_id, command.topic(), item);
                 (
                     format!("button_{}", id),
