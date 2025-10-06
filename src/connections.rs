@@ -27,9 +27,7 @@ fn get_mac_addresses() -> Result<Vec<String>> {
     let addresses = interfaces
         .into_iter()
         .filter_map(|interface| {
-            let Some(address) = interface.address else {
-                return None;
-            };
+            let address = interface.address?;
             (interface.operate_state == OperateState::Up
                 && interface
                     .addr_info
