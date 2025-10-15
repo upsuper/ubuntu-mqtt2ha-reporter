@@ -1,6 +1,5 @@
 use anyhow::{Context as _, Result};
 use serde::Deserialize;
-use std::fmt;
 use std::process::Command;
 
 pub fn get_connections() -> Result<Vec<(&'static str, String)>> {
@@ -66,21 +65,4 @@ enum Scope {
     Host,
     Link,
     Global,
-}
-
-pub struct Display<'a>(pub &'a [(&'static str, String)]);
-
-impl<'a> fmt::Display for Display<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut first = true;
-        for (key, value) in self.0 {
-            if first {
-                first = false;
-            } else {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}={}", key, value)?;
-        }
-        Ok(())
-    }
 }

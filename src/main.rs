@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::host::HostInformation;
 use crate::main_loop::StopReason;
 use crate::sleep_monitor::SleepEvent;
 use anyhow::{Context as _, Error, Result, anyhow};
@@ -16,10 +17,9 @@ mod command;
 mod command_subscriber;
 mod commands;
 mod config;
-mod connections;
 mod discovery_publisher;
 mod ha;
-mod machine_id;
+mod host;
 mod main_loop;
 mod sensor;
 mod sensor_publisher;
@@ -30,32 +30,13 @@ mod utils;
 #[global_allocator]
 static GLOBAL_ALLOCATOR: MiMalloc = MiMalloc;
 
-struct HostInformation {
-    hostname: &'static str,
-    machine_id: &'static str,
-    connections: Vec<(&'static str, String)>,
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     pretty_env_logger::init();
 
-    let hostname = hostname::get().context("Failed to get hostname")?;
-    let hostname: &str = hostname.to_string_lossy().into_owned().leak();
-    info!("Hostname: {}", hostname);
-    let machine_id = machine_id::get().context("Failed to get machine ID")?;
-    let machine_id: &str = machine_id.hyphenated().to_string().leak();
-    info!("Machine ID: {}", machine_id);
-    let connections = connections::get_connections().context("Failed to get connections")?;
-    info!(
-        "Connections: {}",
-        connections::Display(connections.as_slice()),
-    );
-    let host_info = HostInformation {
-        hostname,
-        machine_id,
-        connections,
-    };
+    let host_info = HostInformation::collect()?;
+    info!("Hostname: {}", host_info.hostname);
+    info!("Machine ID: {}", host_info.machine_id);
 
     info!("Reading config...");
     let config = fs::read_to_string("config.toml").context("Could not read config.toml")?;

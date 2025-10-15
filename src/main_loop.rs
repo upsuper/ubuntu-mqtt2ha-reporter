@@ -1,9 +1,10 @@
 use crate::commands::create_commands;
 use crate::config::{Config, Mqtt};
+use crate::host::HostInformation;
 use crate::sensors::{Sensors, create_sensors};
 use crate::utils::snake_case::make_snake_case;
-use crate::{HostInformation, discovery_publisher, sensor_publisher};
 use crate::{command_subscriber, commands::Commands};
+use crate::{discovery_publisher, sensor_publisher};
 use anyhow::{Context as _, Error, Result, anyhow};
 use backoff::ExponentialBackoff;
 use futures_util::{FutureExt as _, TryFutureExt as _};

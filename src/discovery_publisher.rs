@@ -1,9 +1,9 @@
-use crate::HostInformation;
 use crate::command::Command;
 use crate::commands::Commands;
 use crate::ha::discovery::{
     Device, HaButtonDiscovery, HaComponentDiscovery, HaDeviceDiscovery, HaSensorDiscovery, Origin,
 };
+use crate::host::HostInformation;
 use crate::sensor::Sensor;
 use crate::sensors::Sensors;
 use crate::utils::snake_case::make_snake_case;
