@@ -1,8 +1,8 @@
+use crate::ha::values::EntityCategory;
 use anyhow::Error;
 use async_trait::async_trait;
 use serde::Serialize;
 use std::borrow::Cow;
-use crate::ha::values::EntityCategory;
 
 #[async_trait]
 pub trait Command: 'static {
