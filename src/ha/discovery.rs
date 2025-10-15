@@ -110,6 +110,8 @@ pub struct HaButtonDiscovery<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     icon: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    entity_category: Option<EntityCategory>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     device_class: Option<&'static str>,
     command_topic: &'a str,
 }
@@ -126,6 +128,7 @@ impl<'a> HaButtonDiscovery<'a> {
                 unique_id,
                 name: discovery.name,
                 icon: discovery.icon,
+                entity_category: discovery.entity_category,
                 device_class: discovery.device_class,
                 command_topic,
             },

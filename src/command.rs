@@ -2,6 +2,7 @@ use anyhow::Error;
 use async_trait::async_trait;
 use serde::Serialize;
 use std::borrow::Cow;
+use crate::ha::values::EntityCategory;
 
 #[async_trait]
 pub trait Command: 'static {
@@ -15,6 +16,7 @@ pub struct CommandDiscovery<'a> {
     pub id: Cow<'a, str>,
     pub name: Cow<'a, str>,
     pub icon: Option<&'static str>,
+    pub entity_category: Option<EntityCategory>,
     pub device_class: Option<&'static str>,
 }
 
@@ -24,8 +26,14 @@ impl<'a> CommandDiscovery<'a> {
             id: init.id.into(),
             name: init.name.into(),
             icon: Some(init.icon),
+            entity_category: None,
             device_class: None,
         }
+    }
+
+    pub fn with_entity_category(mut self, entity_category: EntityCategory) -> Self {
+        self.entity_category = Some(entity_category);
+        self
     }
 
     pub fn with_device_class(mut self, device_class: &'static str) -> Self {

@@ -20,5 +20,6 @@ pub enum StateClass {
 #[derive(Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EntityCategory {
+    Config,
     Diagnostic,
 }

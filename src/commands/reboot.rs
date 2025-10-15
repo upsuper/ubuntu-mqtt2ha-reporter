@@ -1,4 +1,5 @@
 use crate::command::{Command, CommandDiscovery, CommandDiscoveryInit};
+use crate::ha::values::EntityCategory;
 use anyhow::{Context, Error, anyhow};
 use async_trait::async_trait;
 use log::info;
@@ -31,6 +32,7 @@ impl Command for RebootCommand {
                 name: "Reboot System",
                 icon: "mdi:restart",
             })
+            .with_entity_category(EntityCategory::Config)
             .with_device_class("restart"),
         ]
     }

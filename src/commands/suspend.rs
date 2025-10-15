@@ -1,4 +1,5 @@
 use crate::command::{Command, CommandDiscovery, CommandDiscoveryInit};
+use crate::ha::values::EntityCategory;
 use anyhow::{Context, Error, anyhow};
 use async_trait::async_trait;
 use log::info;
@@ -31,6 +32,7 @@ impl Command for SuspendCommand {
                 name: "Suspend System",
                 icon: "mdi:sleep",
             })
+            .with_entity_category(EntityCategory::Config)
             .with_device_class("restart"),
         ]
     }
