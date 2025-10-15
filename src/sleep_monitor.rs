@@ -3,8 +3,9 @@ use futures_util::Stream;
 use futures_util::stream::StreamExt;
 use log::warn;
 use std::os::fd::OwnedFd;
+use zbus::message::Type as MessageType;
 use zbus::names::{InterfaceName, MemberName};
-use zbus::{Connection, MatchRule, MessageStream, MessageType, Proxy, zvariant};
+use zbus::{Connection, MatchRule, MessageStream, Proxy, zvariant};
 
 const LOGIN1: &str = "org.freedesktop.login1";
 const LOGIN1_PATH: &str = "/org/freedesktop/login1";
