@@ -20,6 +20,8 @@ pub struct HaDeviceDiscovery<'a> {
 pub struct Device<'a> {
     pub name: &'static str,
     pub identifiers: &'a [&'static str],
+    pub manufacturer: &'static str,
+    pub model: &'static str,
     #[serde(skip_serializing_if = "<[_]>::is_empty")]
     pub connections: &'a [(&'static str, String)],
 }

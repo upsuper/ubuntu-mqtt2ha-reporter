@@ -41,6 +41,10 @@ pub async fn publish_discovery(
     let device = Device {
         name: host_info.hostname,
         identifiers: &[host_info.machine_id],
+        // Send empty string so that if manufacturer or model becomes unavailable,
+        // it will be cleared correctly in Home Assistant.
+        manufacturer: host_info.manufacturer.unwrap_or(""),
+        model: host_info.model.unwrap_or(""),
         connections: &host_info.connections,
     };
     let origin = Origin {
