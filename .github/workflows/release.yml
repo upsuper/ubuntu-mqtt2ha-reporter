@@ -21,8 +21,8 @@ jobs:
 
       - name: Install cargo-deb
         run: |
-          wget https://github.com/kornelski/cargo-deb/releases/download/v3.6.1/cargo-deb_3.6.1-1_amd64.deb
-          sudo dpkg -i cargo-deb_3.6.1-1_amd64.deb
+          wget https://github.com/kornelski/cargo-deb/releases/download/v3.6.2/cargo-deb_3.6.2-1_amd64.deb
+          sudo dpkg -i cargo-deb_3.6.2-1_amd64.deb
 
       - name: Cache cargo registry
         uses: actions/cache@v4
