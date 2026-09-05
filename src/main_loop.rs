@@ -26,14 +26,18 @@ pub struct MainLoop {
 }
 
 impl MainLoop {
-    pub fn new(host_info: HostInformation, config: Config) -> Result<Self> {
+    pub fn new(
+        host_info: HostInformation,
+        config: Config,
+        force_update: mpsc::Sender<()>,
+    ) -> Result<Self> {
         let topic_base = format!(
             "{}/{}",
             config.mqtt.base_topic,
             make_snake_case(host_info.hostname)
         );
         let sensors = create_sensors(&topic_base)?;
-        let commands = create_commands(&topic_base);
+        let commands = create_commands(&topic_base, force_update);
         let availability_topic = format!("{topic_base}/availability");
         let options = build_mqtt_options(host_info.hostname, &config.mqtt)?;
         Ok(Self {
@@ -48,6 +52,7 @@ impl MainLoop {
 
     async fn initialize(
         &self,
+        force_update: &mut mpsc::Receiver<()>,
         stop: impl Future<Output = StopReason>,
     ) -> Result<impl Future<Output = Result<()>>> {
         let backoff = ExponentialBackoff::default();
@@ -135,13 +140,18 @@ impl MainLoop {
                 };
                 let interval_duration =
                     Duration::from_secs(u64::from(self.config.daemon.interval_in_minutes) * 60);
-                let mut interval = interval(interval_duration);
-                interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+                let mut update_interval = interval(interval_duration);
+                update_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
                 // Don't let publishing breach 80% of interval.
                 let timeout_duration = interval_duration * 4 / 5;
 
                 loop {
-                    interval.tick().await;
+                    select! {
+                        _ = update_interval.tick() => {}
+                        _ = force_update.recv() => {
+                            update_interval.reset();
+                        }
+                    }
                     match timeout(timeout_duration, publisher.publish_status()).await {
                         Ok(()) => {}
                         // Ignore timeout.
@@ -193,10 +203,14 @@ impl MainLoop {
         })
     }
 
-    pub async fn run(&self, stop: impl Future<Output = StopReason>) -> Result<()> {
+    pub async fn run(
+        &self,
+        force_update: &mut mpsc::Receiver<()>,
+        stop: impl Future<Output = StopReason>,
+    ) -> Result<()> {
         let stop = stop.shared();
         let r = select! {
-            r = self.initialize(stop.clone()) => r?,
+            r = self.initialize(force_update, stop.clone()) => r?,
             reason = stop => {
                 info!("Stopping during initialization for {}...", reason);
                 return Ok(());

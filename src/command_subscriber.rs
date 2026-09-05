@@ -13,6 +13,10 @@ impl<'a> CommandSubscriber<'a> {
     pub fn new(commands: &'a Commands) -> Self {
         let topic_to_command = [
             (
+                commands.update_command.topic(),
+                &commands.update_command as &dyn Command,
+            ),
+            (
                 commands.reboot_command.topic(),
                 &commands.reboot_command as &dyn Command,
             ),

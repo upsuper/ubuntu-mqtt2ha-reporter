@@ -30,6 +30,7 @@ pub async fn publish_discovery(
         reboot_sensor,
     } = sensors;
     let Commands {
+        update_command,
         reboot_command,
         suspend_command,
     } = commands;
@@ -61,6 +62,7 @@ pub async fn publish_discovery(
         collector.add_sensor(net_sensor);
         collector.add_sensor(apt_sensor);
         collector.add_sensor(reboot_sensor);
+        collector.add_command(update_command);
         collector.add_command(reboot_command);
         collector.add_command(suspend_command);
         collector.result

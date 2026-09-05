@@ -11,7 +11,7 @@ use signal_hook::iterator::Signals;
 use std::pin::Pin;
 use std::{fs, thread};
 use tokio::select;
-use tokio::sync::SetOnce;
+use tokio::sync::{SetOnce, mpsc};
 
 mod command;
 mod command_subscriber;
@@ -58,7 +58,8 @@ async fn main() -> Result<(), Error> {
     let sleep_events = sleep_monitor.start_monitoring().await?;
     pin_mut!(sleep_events);
 
-    let main_loop = main_loop::MainLoop::new(host_info, config)?;
+    let (force_update_tx, mut force_update_rx) = mpsc::channel::<()>(1);
+    let main_loop = main_loop::MainLoop::new(host_info, config, force_update_tx)?;
     loop {
         let stop = async {
             select! {
@@ -74,7 +75,7 @@ async fn main() -> Result<(), Error> {
                     None
                 }
             };
-            main_loop.run(stop).await?;
+            main_loop.run(&mut force_update_rx, stop).await?;
         }
         if SHUTDOWN.get().is_some() {
             break;
